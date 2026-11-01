@@ -156,7 +156,7 @@ export default function UserManagement() {
       supervisorId: selectedSupervisor?.id || null,
       supervisorName: selectedSupervisor?.name || null,
       avatar: `https://ui-avatars.com/api/?name=${encodeURIComponent(name)}&background=0f172a&color=fff`,
-      password: password.trim() || '12345@Aams',
+      password: password.trim() || 'TechAbe@123',
       forcePasswordChange: editingUserId ? 0 : 1
     }
 
@@ -816,7 +816,7 @@ export default function UserManagement() {
                 </div>
                 <input
                   type="text"
-                  placeholder={editingUserId ? (language === 'AM' ? 'ባዶ ከተተወ የቀድሞው ይቀጥላል' : 'Leave blank to retain current password') : '12345@Aams'}
+                  placeholder={editingUserId ? (language === 'AM' ? 'ባዶ ከተተወ የቀድሞው ይቀጥላል' : 'Leave blank to retain current password') : '••••••••••••'}
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   className="w-full px-4 py-3 rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-sm font-mono font-bold outline-none focus:ring-2 focus:ring-purple-500 transition-all"
@@ -824,8 +824,8 @@ export default function UserManagement() {
                 {!editingUserId && (
                   <p className="text-[11px] text-slate-400">
                     {language === 'AM'
-                      ? 'ባዶ ከተውት ነባሪው "12345@Aams" ይሆናል። ተጠቃሚው ሲገባ የራሱን ቋሚ የይለፍ ቃል ይቀይራል።'
-                      : 'Defaults to "12345@Aams". The user will be required to create their own private password upon first login.'}
+                      ? 'ተጠቃሚው ሲገባ የራሱን ቋሚ የይለፍ ቃል መቀየር ይችላል።'
+                      : 'The user will be required to create their own private password upon first login.'}
                   </p>
                 )}
               </div>

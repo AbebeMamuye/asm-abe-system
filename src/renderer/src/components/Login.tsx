@@ -8,7 +8,6 @@ import {
   Phone,
   Lock,
   Sparkles,
-  UserCheck,
   CheckCircle2
 } from 'lucide-react'
 import { useStore, TRANSLATIONS } from '../store/useStore'
@@ -33,45 +32,6 @@ const Login = () => {
   const [changeError, setChangeError] = useState('')
   const [changeSuccess, setChangeSuccess] = useState('')
 
-  // Quick Persona Test Accounts from AMIS Video Part 1 & 2
-  const quickPersonas = [
-    {
-      name: 'ዮሐንስ ጌታቸው (መምህር / ICT Teacher)',
-      phone: '0923000005',
-      role: 'Guest',
-      badge: '💻 ዮሐንስ',
-      desc: 'የእኔ ንብረቶች፣ QR ኮድ፣ ንብረት አስተላልፍ'
-    },
-    {
-      name: 'አለሙ በቀለ (መምህር / Peer Teacher)',
-      phone: '0923000006',
-      role: 'Guest',
-      badge: '👨‍🏫 አለሙ',
-      desc: 'የዝውውር ጥያቄ መቀበያ (Accept Transfer)'
-    },
-    {
-      name: 'ተመስገን መርሻ (ግምጃ ቤት ኃላፊ)',
-      phone: '0923000003',
-      role: 'Admin',
-      badge: '🏢 ግምጃ ቤት',
-      desc: 'ሞዴል 19፣ ሞዴል 22፣ ቆጠራ'
-    },
-    {
-      name: 'አንተነህ መኮንን (ርዕሰ መምህር / Principal)',
-      phone: '0923000004',
-      role: 'Auditor',
-      badge: '👔 ርዕሰ መምህር',
-      desc: 'ማረጋገጫና ፍቃድ ሰጪ (Approvals)'
-    },
-    {
-      name: 'System Admin (ሲስተም አድሚን)',
-      phone: '0923000001',
-      role: 'Admin',
-      badge: '👑 አድሚን',
-      desc: 'ትስስር መፍጠር፣ ሙሉ ቁጥጥር'
-    }
-  ]
-
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault()
     setIsLoading(true)
@@ -94,12 +54,6 @@ const Login = () => {
     } finally {
       setIsLoading(false)
     }
-  }
-
-  // Handle Quick Persona Login
-  const handleSelectPersona = (phone: string) => {
-    setUsername(phone)
-    setPassword('12345@Aams')
   }
 
   // Handle Mandatory First-Time Password Reset
@@ -193,40 +147,22 @@ const Login = () => {
                     {language === 'AM' ? 'የመግቢያ መለያ' : 'Primary Identifier'}
                   </span>
                   {language === 'AM'
-                    ? 'በስልክ ቁጥር (ምሳሌ፡ 0923000005) ወይም በኢሜይል መግባት ይችላሉ።'
-                    : 'Sign in using your registered mobile phone number or email.'}
+                    ? 'በተጠቃሚ ስም (Username)፣ በስልክ ቁጥር ወይም በኢሜይል መግባት ይችላሉ።'
+                    : 'Sign in using your username, registered mobile phone number, or email.'}
                 </div>
               </div>
             </div>
           </div>
 
-          {/* Quick Persona Selector */}
-          <div className="relative z-10 pt-6 mt-6 border-t border-slate-800/80">
-            <div className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-2 flex items-center gap-1.5">
-              <UserCheck size={13} className="text-blue-400" />
-              <span>{language === 'AM' ? 'የሙከራ ተጠቃሚዎችን በፍጥነት ይምረጡ' : 'Quick Demo Personas (1-Click)'}</span>
+          {/* Secure Production Portal Footer */}
+          <div className="relative z-10 pt-6 mt-6 border-t border-slate-800/80 flex items-center justify-between text-slate-400 text-xs">
+            <div className="flex items-center gap-2">
+              <Lock size={14} className="text-blue-400" />
+              <span className="font-medium text-[11px]">
+                {language === 'AM' ? 'የተጠበቀ የመንግስት ንብረት አስተዳደር ፖርታል' : 'Secure Enterprise Property Management Portal'}
+              </span>
             </div>
-            <div className="flex flex-wrap gap-1.5">
-              {quickPersonas.map((p) => (
-                <button
-                  key={p.phone}
-                  type="button"
-                  onClick={() => handleSelectPersona(p.phone)}
-                  className={`px-2.5 py-1.5 rounded-xl text-[11px] font-bold border transition-all cursor-pointer ${
-                    username === p.phone
-                      ? 'bg-blue-600 text-white border-blue-500 shadow-md shadow-blue-500/20'
-                      : 'bg-slate-800/80 text-slate-300 border-slate-700/60 hover:bg-slate-700'
-                  }`}
-                  title={`${p.name} - ${p.desc}`}
-                >
-                  {p.badge}
-                </button>
-              ))}
-            </div>
-            <div className="text-[10px] text-slate-500 mt-2 font-mono">
-              {language === 'AM' ? 'ነባሪ የይለፍ ቃል፡ ' : 'Default password: '}
-              <span className="text-blue-400 font-bold">12345@Aams</span>
-            </div>
+            <span className="text-[10px] font-mono text-slate-500 font-bold">v2.0</span>
           </div>
         </div>
 
@@ -276,7 +212,7 @@ const Login = () => {
               <div>
                 <label className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2 flex items-center gap-1.5">
                   <Phone size={13} className="text-blue-400" />
-                  <span>{language === 'AM' ? 'ስልክ ቁጥር ወይም የተጠቃሚ ስም *' : 'Phone Number or Email *'}</span>
+                  <span>{language === 'AM' ? 'የተጠቃሚ ስም፣ ስልክ ቁጥር ወይም ኢሜይል *' : 'Username, Phone Number or Email *'}</span>
                 </label>
                 <input
                   id="input-username"
@@ -284,7 +220,7 @@ const Login = () => {
                   value={username}
                   onChange={(e) => setUsername(e.target.value)}
                   className="w-full bg-slate-800/90 border border-slate-700 rounded-2xl p-4 text-sm font-medium focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all text-white placeholder-slate-500"
-                  placeholder="0923000005 ወይም admin@ams.local"
+                  placeholder={language === 'AM' ? 'AbeTech ወይም ስልክ / ኢሜይል' : 'AbeTech, phone or email'}
                   required
                 />
               </div>
@@ -305,10 +241,7 @@ const Login = () => {
                 />
               </div>
 
-              <div className="flex justify-between items-center pt-1">
-                <span className="text-[11px] text-slate-400">
-                  {language === 'AM' ? 'ነባሪ፡ 12345@Aams' : 'Default: 12345@Aams'}
-                </span>
+              <div className="flex justify-end items-center pt-1">
                 <button
                   type="button"
                   onClick={() => setShowForgotModal(true)}
@@ -359,14 +292,14 @@ const Login = () => {
               </h3>
               <p className="text-xs text-slate-400 mb-6">
                 {language === 'AM'
-                  ? 'እንኳን ደህና መጡ! በደህንነት መመሪያው መሰረት ነባሪውን የይለፍ ቃል (12345@Aams) ወደ እርስዎ ሚስጥራዊ የይለፍ ቃል ይቀይሩ።'
-                  : 'Welcome! For security compliance, please replace your default temporary password.'}
+                  ? 'እንኳን ደህና መጡ! በደህንነት መመሪያው መሰረት ጊዜያዊ የይለፍ ቃልዎን ወደ እርስዎ ሚስጥራዊ የይለፍ ቃል ይቀይሩ።'
+                  : 'Welcome! For security compliance, please replace your temporary password with a secure password.'}
               </p>
 
               <form onSubmit={handleForcePasswordSubmit} className="w-full space-y-4 text-left">
                 <div>
                   <label className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2 block">
-                    {language === 'AM' ? 'የገቡበት ነባሪ የይለፍ ቃል (Current Temporary Password) *' : 'Current Temporary Password *'}
+                    {language === 'AM' ? 'አሁን የገቡበት ጊዜያዊ የይለፍ ቃል *' : 'Current Temporary Password *'}
                   </label>
                   <input
                     id="input-current-password"
@@ -374,7 +307,7 @@ const Login = () => {
                     value={currentPasswordInput}
                     onChange={(e) => setCurrentPasswordInput(e.target.value)}
                     className="w-full bg-slate-800 border border-slate-700 rounded-xl p-3.5 text-xs text-white focus:ring-2 focus:ring-blue-500 font-mono"
-                    placeholder={language === 'AM' ? 'አድሚኑ የሰጠዎትን ነባሪ የይለፍ ቃል ያስገቡ' : 'Enter default temporary password'}
+                    placeholder={language === 'AM' ? 'ጊዜያዊ የይለፍ ቃልዎን ያስገቡ' : 'Enter temporary password'}
                     required
                   />
                 </div>

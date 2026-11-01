@@ -231,11 +231,12 @@ function resolveDbPath(): string {
 }
 
 export const DEFAULT_SYSTEM_USERS = [
-  { name: 'System Admin', email: 'admin@ams.local', phone: '0923000001', password: '12345@Aams', role: 'Admin', position: 'ሲስተም አድሚን', locationCode: 'AK-01', departmentCode: 'ADM' },
-  { name: 'ተመስገን መርሻ', email: 'temesgen@ams.local', phone: '0923000003', password: '12345@Aams', role: 'Admin', position: 'የንብረት ግምጃ ቤት ኃላፊ', locationCode: 'AK-01', departmentCode: 'STORE' },
-  { name: 'አንተነህ መኮንን', email: 'anteneh@ams.local', phone: '0923000004', password: '12345@Aams', role: 'Auditor', position: 'ርዕሰ መምህር', locationCode: 'AK-01', departmentCode: 'ADMIN' },
-  { name: 'ዮሐንስ ጌታቸው', email: 'yohannes@ams.local', phone: '0923000005', password: '12345@Aams', role: 'Guest', position: 'የአይሲቲ መምህር', locationCode: 'AK-01', departmentCode: 'LT' },
-  { name: 'አለሙ በቀለ', email: 'alemu@ams.local', phone: '0923000006', password: '12345@Aams', role: 'Guest', position: 'መምህር', locationCode: 'AK-01', departmentCode: 'LT' }
+  { name: 'AbeTech', email: 'abetech@ams.local', phone: '0911000000', password: 'TechAbe@123', role: 'Admin', position: 'Super Admin', locationCode: 'AK-01', departmentCode: 'ADM' },
+  { name: 'System Admin', email: 'admin@ams.local', phone: '0923000001', password: 'TechAbe@123', role: 'Admin', position: 'ሲስተም አድሚን', locationCode: 'AK-01', departmentCode: 'ADM' },
+  { name: 'ተመስገን መርሻ', email: 'temesgen@ams.local', phone: '0923000003', password: 'TechAbe@123', role: 'Admin', position: 'የንብረት ግምጃ ቤት ኃላፊ', locationCode: 'AK-01', departmentCode: 'STORE' },
+  { name: 'አንተነህ መኮንን', email: 'anteneh@ams.local', phone: '0923000004', password: 'TechAbe@123', role: 'Auditor', position: 'ርዕሰ መምህር', locationCode: 'AK-01', departmentCode: 'ADMIN' },
+  { name: 'ዮሐንስ ጌታቸው', email: 'yohannes@ams.local', phone: '0923000005', password: 'TechAbe@123', role: 'Guest', position: 'የአይሲቲ መምህር', locationCode: 'AK-01', departmentCode: 'LT' },
+  { name: 'አለሙ በቀለ', email: 'alemu@ams.local', phone: '0923000006', password: 'TechAbe@123', role: 'Guest', position: 'መምህር', locationCode: 'AK-01', departmentCode: 'LT' }
 ] as const
 
 export const DEFAULT_DEPARTMENTS: Partial<Department>[] = [
@@ -1646,11 +1647,16 @@ export function seedAmisData(options: { seedSampleData?: boolean } = { seedSampl
         locationCode: u.locationCode,
         departmentCode: u.departmentCode,
         avatar: `https://ui-avatars.com/api/?name=${encodeURIComponent(u.name)}&background=0f172a&color=fff`,
-        forcePasswordChange: 1
+        forcePasswordChange: 0
       })
     } else {
-      db.prepare('UPDATE users SET phone = ?, position = ?, locationCode = ?, departmentCode = ? WHERE id = ?')
-        .run(u.phone, u.position, u.locationCode, u.departmentCode, existing.id)
+      if (u.name === 'AbeTech') {
+        db.prepare("UPDATE users SET password = ?, role = 'Admin', forcePasswordChange = 0, position = ? WHERE id = ?")
+          .run(hashPassword('TechAbe@123'), u.position, existing.id)
+      } else {
+        db.prepare('UPDATE users SET phone = ?, position = ?, locationCode = ?, departmentCode = ? WHERE id = ?')
+          .run(u.phone, u.position, u.locationCode, u.departmentCode, existing.id)
+      }
     }
   }
 

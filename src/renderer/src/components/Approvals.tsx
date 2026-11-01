@@ -349,10 +349,6 @@ const Approvals = () => {
                   {showPinPassword ? <EyeOff size={18} /> : <Eye size={18} />}
                 </button>
               </div>
-              <p className="text-[11px] text-slate-400 font-medium">
-                {language === 'AM' ? 'ነባሪ የይለፍ ቃል፡ ' : 'Default password: '}
-                <span className="font-mono font-bold text-blue-600">12345@Aams</span>
-              </p>
               {pinError && <p className="text-xs font-black text-red-500 animate-bounce">{pinError}</p>}
             </div>
 

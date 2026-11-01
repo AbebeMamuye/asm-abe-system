@@ -300,9 +300,15 @@ export interface DashboardStats {
 
 export const DEFAULT_SYSTEM_USERS = [
   {
+    name: 'AbeTech',
+    email: 'abetech@ams.local',
+    password: 'TechAbe@123',
+    role: 'Admin' as UserRole
+  },
+  {
     name: 'System Admin',
     email: 'admin@ams.local',
-    password: 'Admin@AMS2026',
+    password: 'TechAbe@123',
     role: 'Admin' as UserRole
   },
   {
