@@ -19,6 +19,7 @@ import ExportDropdown from './ExportDropdown'
 import jsPDF from 'jspdf'
 import autoTable from 'jspdf-autotable'
 import { getRolePermissions } from '../lib/permissions'
+import { toEthiopianDate, getCurrentEthiopianDate } from '../lib/ethiopianCalendar'
 
 export default function TransferAssets() {
   const {
@@ -139,7 +140,7 @@ export default function TransferAssets() {
     doc.setFontSize(16); doc.setFont('helvetica', 'bold')
     doc.text('PUBLIC ASSET TRANSFER & CUSTODY HANDOVER REGISTER', 105, 18, { align: 'center' })
     doc.setFontSize(9); doc.setFont('helvetica', 'normal')
-    doc.text(`Generated: ${new Date().toLocaleString()} | Total Records: ${transfers.length}`, 105, 24, { align: 'center' })
+    doc.text(`Generated: ${new Date().toLocaleString()} | EC: ${getCurrentEthiopianDate()} ዓ.ም | Total Records: ${transfers.length}`, 105, 24, { align: 'center' })
 
     const tableData = filteredTransfers.map((tr, i) => [
       i + 1,
@@ -149,12 +150,12 @@ export default function TransferAssets() {
       tr.toUserName,
       tr.department || '—',
       tr.status || 'Pending',
-      tr.transferDate ? new Date(tr.transferDate).toLocaleDateString() : '—'
+      tr.transferDate ? toEthiopianDate(tr.transferDate) + ' ዓ.ም' : '—'
     ])
 
     autoTable(doc, {
       startY: 30,
-      head: [['#', 'Tag / Ref', 'Asset Description', 'From Holder', 'To Recipient', 'Department', 'Status', 'Date']],
+      head: [['#', 'Tag / Ref', 'Asset Description', 'From Holder', 'To Recipient', 'Department', 'Status', 'Date (ዓ.ም / EC)']],
       body: tableData,
       theme: 'grid',
       headStyles: { fillColor: [79, 70, 229] }
@@ -172,8 +173,8 @@ export default function TransferAssets() {
     'Department': tr.department || '—',
     'Reason': tr.reason,
     'Status': tr.status,
-    'Transfer Date': tr.transferDate || '—',
-    'Response Date': tr.responseDate || '—',
+    'Transfer Date (ዓ.ም)': tr.transferDate ? toEthiopianDate(tr.transferDate) + ' ዓ.ም' : '—',
+    'Response Date (ዓ.ም)': tr.responseDate ? toEthiopianDate(tr.responseDate) + ' ዓ.ም' : '—',
     'Notes': tr.note || '—'
   }))
 
@@ -270,7 +271,7 @@ export default function TransferAssets() {
                       {p.tagNumber || `ASSET #${p.assetId}`}
                     </span>
                     <span className="text-[10px] font-bold text-slate-400">
-                      {p.transferDate ? new Date(p.transferDate).toLocaleDateString() : 'Today'}
+                      {p.transferDate ? toEthiopianDate(p.transferDate) + ' ዓ.ም' : 'ዛሬ'}
                     </span>
                   </div>
                   <h4 className="font-black text-sm text-slate-900 dark:text-white mt-1.5">{p.assetName}</h4>
@@ -388,7 +389,7 @@ export default function TransferAssets() {
                   </td>
 
                   <td className="px-6 py-4 border-2 border-slate-900 dark:border-slate-700 text-right text-xs font-bold text-slate-400">
-                    {tr.transferDate ? new Date(tr.transferDate).toLocaleDateString() : '—'}
+                    {tr.transferDate ? toEthiopianDate(tr.transferDate) + ' ዓ.ም' : '—'}
                   </td>
                 </tr>
               ))}
