@@ -76,6 +76,12 @@ const Sidebar = () => {
       roles: ['Admin', 'Manager', 'Auditor']
     },
     {
+      id: 'employee-clearance',
+      label: language === 'AM' ? 'የሰራተኞች ክሊራንስ' : 'Employee Clearance',
+      icon: PackageCheck,
+      roles: ['Admin', 'Manager', 'Auditor']
+    },
+    {
       id: 'reports',
       label: language === 'AM' ? 'ሪፖርቶች' : 'Reports & Analytics',
       icon: BarChart,

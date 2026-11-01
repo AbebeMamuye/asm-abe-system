@@ -611,6 +611,44 @@ export function initDatabase() {
     }
   }
 
+  // Employee Clearance Tables (የሰራተኞች ክሊራንስ ሰንጠረዦች)
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS employee_clearances (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      clearanceNo TEXT UNIQUE NOT NULL,
+      employeeId INTEGER,
+      employeeName TEXT NOT NULL,
+      department TEXT NOT NULL,
+      position TEXT,
+      reason TEXT NOT NULL DEFAULT 'Resignation',
+      status TEXT DEFAULT 'IN_PROGRESS',
+      initialAssetCount INTEGER DEFAULT 0,
+      clearedAssetCount INTEGER DEFAULT 0,
+      clearedAt TEXT,
+      clearedByStorekeeperId INTEGER,
+      clearedByStorekeeperName TEXT,
+      approverSignatureHash TEXT,
+      createdAt TEXT DEFAULT (datetime('now'))
+    )
+  `)
+
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS clearance_items (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      clearanceId INTEGER,
+      assetId INTEGER NOT NULL,
+      assetName TEXT NOT NULL,
+      tagNumber TEXT NOT NULL,
+      actionType TEXT NOT NULL,
+      conditionAtReturn TEXT DEFAULT 'Functional',
+      returnedToStoreNo TEXT,
+      transferredToUserId INTEGER,
+      transferredToUserName TEXT,
+      handledBy TEXT NOT NULL,
+      timestamp TEXT DEFAULT (datetime('now'))
+    )
+  `)
+
   // Feature Toggle & System Configuration Table
   db.exec(`
     CREATE TABLE IF NOT EXISTS system_settings (
@@ -2210,5 +2248,222 @@ export function getAllSystemSettings(): Record<string, string> {
   }
   return result
 }
+
+// ── EMPLOYEE CLEARANCE HANDLERS (የሰራተኞች ክሊራንስ) ─────────────
+
+export interface ClearanceRecord {
+  id?: number
+  clearanceNo: string
+  employeeId?: number
+  employeeName: string
+  department: string
+  position?: string
+  reason: string
+  status: 'IN_PROGRESS' | 'CLEARED' | 'REJECTED'
+  initialAssetCount: number
+  clearedAssetCount: number
+  clearedAt?: string
+  clearedByStorekeeperId?: number
+  clearedByStorekeeperName?: string
+  approverSignatureHash?: string
+  createdAt?: string
+}
+
+export function getAllClearances(): ClearanceRecord[] {
+  return db.prepare('SELECT * FROM employee_clearances ORDER BY createdAt DESC').all() as ClearanceRecord[]
+}
+
+// Fixed assets categories required for clearance (ቋሚ ንብረቶች ብቻ)
+// Stationery and Cleaning items are consumables (አላቂ) and expensed upon issue
+export const FIXED_ASSET_CATEGORIES = ['Electronics', 'Furniture', 'Vehicles', 'Machinery', 'Appliances', 'Others']
+export const CONSUMABLE_CATEGORIES = ['Stationery', 'Cleaning']
+
+export function getEmployeeAssignedAssets(employeeName: string) {
+  const trimmed = employeeName.trim()
+  return db.prepare(`
+    SELECT id, name, category, tagNumber, serialNumber, unitCost, unit, condition, location, department, purchaseDate, lifecycleStatus
+    FROM assets
+    WHERE lower(custodian) = lower(?) 
+      AND disposalStatus = 'Active'
+      AND category NOT IN ('Stationery', 'Cleaning')
+    ORDER BY category ASC, name ASC
+  `).all(trimmed) as any[]
+}
+
+export function getEmployeeConsumables(employeeName: string) {
+  const trimmed = employeeName.trim()
+  return db.prepare(`
+    SELECT id, name, category, tagNumber, quantity, unit, unitCost, purchaseDate, department
+    FROM assets
+    WHERE lower(custodian) = lower(?)
+      AND category IN ('Stationery', 'Cleaning')
+    ORDER BY name ASC
+  `).all(trimmed) as any[]
+}
+
+export function createClearance(data: Partial<ClearanceRecord>) {
+  const assets = getEmployeeAssignedAssets(data.employeeName || '')
+  const clearanceNo = data.clearanceNo || `CLR-${new Date().getFullYear()}-${Math.floor(1000 + Math.random() * 9000)}`
+
+  const stmt = db.prepare(`
+    INSERT INTO employee_clearances (
+      clearanceNo, employeeId, employeeName, department, position, reason,
+      status, initialAssetCount, clearedAssetCount
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `)
+
+  const initialCount = assets.length
+  const initialStatus = initialCount === 0 ? 'CLEARED' : 'IN_PROGRESS'
+
+  const res = stmt.run(
+    clearanceNo,
+    data.employeeId || null,
+    data.employeeName,
+    data.department || 'General',
+    data.position || 'Staff',
+    data.reason || 'Resignation',
+    initialStatus,
+    initialCount,
+    0
+  )
+
+  return {
+    success: true,
+    id: res.lastInsertRowid,
+    clearanceNo,
+    initialAssetCount: initialCount,
+    status: initialStatus
+  }
+}
+
+export function returnAssetToStore(data: {
+  assetId: number
+  employeeName: string
+  condition?: string
+  storeNo?: string
+  shelfNo?: string
+  handledBy: string
+  notes?: string
+}) {
+  const asset = db.prepare('SELECT * FROM assets WHERE id = ?').get(data.assetId) as any
+  if (!asset) return { success: false, error: 'Asset not found' }
+
+  if (asset.custodian && asset.custodian.trim().toLowerCase() !== data.employeeName.trim().toLowerCase()) {
+    return { success: false, error: `Asset belongs to ${asset.custodian}, not ${data.employeeName}` }
+  }
+
+  const finalCondition = data.condition || asset.condition || 'Functional'
+  const storeLocation = data.storeNo ? `Store: ${data.storeNo}${data.shelfNo ? ` / Shelf: ${data.shelfNo}` : ''}` : 'Main Store'
+
+  const runTransaction = db.transaction(() => {
+    // 1. Reset asset custodian and return to Store
+    db.prepare(`
+      UPDATE assets 
+      SET custodian = NULL,
+          department = 'ግምጃ ቤት (STORE)',
+          condition = ?,
+          lifecycleStatus = 'Registered',
+          location = ?,
+          lastUpdated = datetime('now')
+      WHERE id = ?
+    `).run(finalCondition, storeLocation, data.assetId)
+
+    // 2. Record asset history
+    db.prepare(`
+      INSERT INTO asset_history (assetId, assetName, tagNumber, actionType, previousStatus, newStatus, performedBy, details)
+      VALUES (?, ?, ?, 'RETURN_TO_STORE', 'Assigned', 'In Store', ?, ?)
+    `).run(
+      asset.id,
+      asset.name,
+      asset.tagNumber || `ETH-AMS-${asset.id.toString().padStart(5, '0')}`,
+      data.handledBy || 'Storekeeper',
+      `Clearance Handover: Returned from custodian [${data.employeeName}] to [${storeLocation}]. Condition: ${finalCondition}. ${data.notes || ''}`
+    )
+
+    // 3. Log into clearance_items
+    db.prepare(`
+      INSERT INTO clearance_items (assetId, assetName, tagNumber, actionType, conditionAtReturn, returnedToStoreNo, handledBy)
+      VALUES (?, ?, ?, 'RETURN_TO_STORE', ?, ?, ?)
+    `).run(
+      asset.id,
+      asset.name,
+      asset.tagNumber || `ETH-AMS-${asset.id.toString().padStart(5, '0')}`,
+      finalCondition,
+      storeLocation,
+      data.handledBy || 'Storekeeper'
+    )
+
+    // 4. Update clearance record if active
+    db.prepare(`
+      UPDATE employee_clearances
+      SET clearedAssetCount = clearedAssetCount + 1
+      WHERE lower(employeeName) = lower(?) AND status = 'IN_PROGRESS'
+    `).run(data.employeeName)
+  })
+
+  runTransaction()
+
+  const remaining = getEmployeeAssignedAssets(data.employeeName)
+  return {
+    success: true,
+    message: `Asset [${asset.name}] returned to store successfully.`,
+    remainingCount: remaining.length,
+    isFullyCleared: remaining.length === 0
+  }
+}
+
+export function finalizeClearance(data: {
+  clearanceNo: string
+  employeeName: string
+  approverId: number
+  approverName: string
+  approverPin: string
+}) {
+  // 1. Zero-debt gatekeeper
+  const remaining = getEmployeeAssignedAssets(data.employeeName)
+  if (remaining.length > 0) {
+    return {
+      success: false,
+      error: `Cannot issue clearance! Employee still holds ${remaining.length} unreturned asset(s).`
+    }
+  }
+
+  // 2. Verify approver PIN
+  const pinRes = verifyUserSigningPin(data.approverId, data.approverPin)
+  if (!pinRes.valid) {
+    return {
+      success: false,
+      error: pinRes.error || 'Invalid Security PIN'
+    }
+  }
+
+  // 3. Generate HMAC digital signature seal
+  const signatureHash = generateDocumentSignature({
+    clearanceNo: data.clearanceNo,
+    employeeName: data.employeeName,
+    status: 'DEBT_FREE_VERIFIED',
+    approverId: data.approverId,
+    timestamp: new Date().toISOString()
+  }, data.approverId, data.approverName)
+
+  // 4. Update clearance status
+  db.prepare(`
+    UPDATE employee_clearances
+    SET status = 'CLEARED',
+        clearedAt = datetime('now'),
+        clearedByStorekeeperId = ?,
+        clearedByStorekeeperName = ?,
+        approverSignatureHash = ?
+    WHERE clearanceNo = ?
+  `).run(data.approverId, data.approverName, signatureHash, data.clearanceNo)
+
+  return {
+    success: true,
+    message: 'Employee clearance officially approved and sealed with digital signature.',
+    signatureHash,
+    clearedAt: new Date().toISOString()
+  }
+}
+
 
 

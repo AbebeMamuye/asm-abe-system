@@ -22,6 +22,7 @@ import VouchersM22 from './components/VouchersM22'
 import InventoryCount from './components/InventoryCount'
 import MyAssets from './components/MyAssets'
 import HierarchyManager from './components/HierarchyManager'
+import EmployeeClearance from './components/EmployeeClearance'
 import { useStore } from './store/useStore'
 import { canAccessTab, getDefaultTabForRole } from './lib/permissions'
 import { ShieldAlert, Menu, User as UserIcon, Globe, LogOut, Settings as SettingsIcon } from 'lucide-react'
@@ -119,6 +120,7 @@ function App(): JSX.Element {
       case 'vouchers-m20':       return <VouchersM20 />
       case 'vouchers-m22':       return <VouchersM22 />
       case 'inventory-count':    return <InventoryCount />
+      case 'employee-clearance': return <EmployeeClearance />
       case 'approvals':          return <Approvals />
       case 'my-assets':          return <MyAssets />
       case 'hierarchies':        return <HierarchyManager />

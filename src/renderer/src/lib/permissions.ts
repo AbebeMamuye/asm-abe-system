@@ -20,6 +20,7 @@ export type TabId =
   | 'reports-balance'
   | 'approvals'
   | 'inventory-count'
+  | 'employee-clearance'
   | 'my-assets'
   | 'settings'
 
@@ -76,6 +77,7 @@ export const ROLE_PERMISSIONS: Record<UserRole, RolePermissions> = {
       'reports-balance',
       'approvals',
       'inventory-count',
+      'employee-clearance',
       'my-assets',
       'settings'
     ],
@@ -120,6 +122,7 @@ export const ROLE_PERMISSIONS: Record<UserRole, RolePermissions> = {
       'reports-balance',
       'approvals',
       'inventory-count',
+      'employee-clearance',
       'my-assets'
     ],
     canRegisterAsset: true,

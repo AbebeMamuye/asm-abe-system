@@ -156,6 +156,18 @@ app.put('/api/transfers/:id/respond', (req, res) => {
 app.get('/api/allocations', (_req, res) => res.json(db.getAllAllocations()))
 app.post('/api/allocations', (req, res) => res.json(db.createAllocation(req.body)))
 
+// ── Employee Clearance & Handover Workflow ──────────────────
+app.get('/api/clearance', (_req, res) => res.json(db.getAllClearances()))
+app.post('/api/clearance', (req, res) => res.json(db.createClearance(req.body)))
+app.get('/api/clearance/employee-assets/:employeeName', (req, res) =>
+  res.json(db.getEmployeeAssignedAssets(decodeURIComponent(req.params.employeeName)))
+)
+app.get('/api/clearance/employee-consumables/:employeeName', (req, res) =>
+  res.json(db.getEmployeeConsumables(decodeURIComponent(req.params.employeeName)))
+)
+app.post('/api/clearance/return-asset', (req, res) => res.json(db.returnAssetToStore(req.body)))
+app.post('/api/clearance/finalize', (req, res) => res.json(db.finalizeClearance(req.body)))
+
 // ── Asset Lifecycle History ─────────────────────────────────
 app.get('/api/asset-history', (req, res) => {
   const assetId = req.query.assetId ? parseInt(req.query.assetId as string, 10) : undefined
