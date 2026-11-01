@@ -45,7 +45,7 @@ const API_BASE = typeof window !== 'undefined' && window.location?.host
   ? `${window.location.protocol}//${window.location.host}/api`
   : 'http://localhost:5002/api'
 
-async function callAPI(endpoint: string, method: 'GET' | 'POST' | 'PUT' | 'DELETE' = 'GET', body?: any) {
+export async function callAPI(endpoint: string, method: 'GET' | 'POST' | 'PUT' | 'DELETE' = 'GET', body?: any) {
   const options: RequestInit = {
     method,
     headers: { 'Content-Type': 'application/json' },
@@ -1023,13 +1023,13 @@ export const useStore = create<AppState>((set, get) => ({
     }
   },
 
-  reviewPendingRequest: async (id: number, action: string, reviewedBy: string, reviewNote?: string) => {
+  reviewPendingRequest: async (id: number, action: string, reviewedBy: string, reviewNote?: string, signerUserId?: number) => {
     try {
       let res: any
       if (window.api?.reviewPendingRequest) {
-        res = await window.api.reviewPendingRequest(id, action, reviewedBy, reviewNote)
+        res = await window.api.reviewPendingRequest(id, action, reviewedBy, reviewNote, signerUserId)
       } else {
-        res = await callAPI(`/pending/${id}/review`, 'PUT', { action, reviewedBy, reviewNote })
+        res = await callAPI(`/pending/${id}/review`, 'PUT', { action, reviewedBy, reviewNote, signerUserId })
       }
       await get().fetchPendingRequests()
       return res || { success: true }

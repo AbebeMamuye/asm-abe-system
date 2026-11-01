@@ -56,8 +56,16 @@ app.post('/api/auth/login', (req, res) => {
 
 app.post('/api/auth/verify-pin', (req, res) => {
   const { userId, pin } = req.body
-  if (!userId || !pin) return res.status(400).json({ valid: false })
-  res.json({ valid: db.verifyUserPin(userId, pin) })
+  if (!userId || !pin) return res.status(400).json({ valid: false, error: 'User ID and PIN required' })
+  const result = db.verifyUserSigningPin(userId, pin)
+  res.json(result)
+})
+
+app.post('/api/auth/set-signing-pin', (req, res) => {
+  const { userId, pin } = req.body
+  if (!userId || !pin) return res.status(400).json({ success: false, error: 'User ID and PIN required' })
+  const result = db.setUserSigningPin(userId, pin)
+  res.json(result)
 })
 
 app.post('/api/auth/change-password', (req, res) => {
@@ -76,7 +84,7 @@ app.delete('/api/users/:id', (req, res) =>
 )
 
 // ── Asset Routes ────────────────────────────────────────────
-app.get('/api/assets', (_req, res) => res.json(db.getAllAssets()))
+app.get('/api/assets', (req, res) => res.json(db.getAllAssets(req.query.scope as string)))
 app.post('/api/assets', (req, res) => res.json(db.addAsset(req.body)))
 app.put('/api/assets/:id', (req, res) =>
   res.json(db.updateAsset(parseInt(req.params.id, 10), req.body))
@@ -110,13 +118,13 @@ app.put('/api/maintenance/:id', (req, res) =>
 )
 
 app.get('/api/pending', (req, res) =>
-  res.json(db.getPendingRequests(req.query.status as string))
+  res.json(db.getPendingRequests(req.query.status as string, req.query.scope as string))
 )
 app.post('/api/pending', (req, res) => res.json(db.createPendingRequest(req.body)))
 app.put('/api/pending/:id/review', (req, res) => {
-  const { action, reviewedBy, reviewNote } = req.body
+  const { action, reviewedBy, reviewNote, signerUserId } = req.body
   res.json(
-    db.reviewPendingRequest(parseInt(req.params.id, 10), action, reviewedBy, reviewNote)
+    db.reviewPendingRequest(parseInt(req.params.id, 10), action, reviewedBy, reviewNote, signerUserId)
   )
 })
 

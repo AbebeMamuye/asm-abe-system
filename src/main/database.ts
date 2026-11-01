@@ -1,7 +1,7 @@
 import Database from 'better-sqlite3'
 import { existsSync, copyFileSync, mkdirSync } from 'fs'
 import { join } from 'path'
-import { hashPassword, verifyPassword, isPasswordHashed } from './auth'
+import { hashPassword, verifyPassword, isPasswordHashed, hashPin, verifyPin, generateDocumentSignature } from './auth'
 
 let db: Database.Database
 const DB_FILENAME = 'asset-management.db'
@@ -373,12 +373,43 @@ export function initDatabase() {
     'department TEXT',
     'supervisorId INTEGER',
     'supervisorName TEXT',
-    'forcePasswordChange INTEGER DEFAULT 0'
+    'forcePasswordChange INTEGER DEFAULT 0',
+    'signingPinHash TEXT',
+    'pinFailedAttempts INTEGER DEFAULT 0',
+    'pinLockedUntil TEXT',
+    "orgPath TEXT DEFAULT '1/'"
   ]
   for (const col of userCols) {
     try {
       db.exec(`ALTER TABLE users ADD COLUMN ${col}`)
     } catch {}
+  }
+
+  // Ensure assets table has orgPath
+  try {
+    db.exec("ALTER TABLE assets ADD COLUMN orgPath TEXT DEFAULT '1/'")
+  } catch {}
+
+  // Ensure pending_requests has approval and digital signature columns
+  const pendingCols = [
+    "orgPath TEXT DEFAULT '1/'",
+    'approvedByUserId INTEGER',
+    'digitalSignatureHash TEXT',
+    'approvalTimestamp TEXT'
+  ]
+  for (const col of pendingCols) {
+    try {
+      db.exec(`ALTER TABLE pending_requests ADD COLUMN ${col}`)
+    } catch {}
+  }
+
+  // Ensure vouchers tables have digitalSignatureHash and verificationQrData
+  for (const tbl of ['vouchers_model19', 'vouchers_model22']) {
+    for (const c of ["orgPath TEXT DEFAULT '1/'", 'digitalSignatureHash TEXT', 'verificationQrData TEXT']) {
+      try {
+        db.exec(`ALTER TABLE ${tbl} ADD COLUMN ${c}`)
+      } catch {}
+    }
   }
 
   db.exec(`
@@ -635,12 +666,74 @@ export function authenticateUser(emailOrNameOrPhone: string, plainPassword: stri
   return { success: true, user: toPublicUser(record) }
 }
 
-export function verifyUserPin(userId: number, plainPassword: string): boolean {
-  const record = db.prepare('SELECT id, password FROM users WHERE id = ?').get(userId) as
-    | { id: number; password?: string }
+export function setUserSigningPin(userId: number, plainPin: string): { success: boolean; message?: string } {
+  if (!plainPin || plainPin.trim().length < 4) {
+    return { success: false, message: 'PIN must be at least 4 digits' }
+  }
+  const hashed = hashPin(plainPin)
+  const result = db.prepare(`
+    UPDATE users 
+    SET signingPinHash = ?, pinFailedAttempts = 0, pinLockedUntil = NULL 
+    WHERE id = ?
+  `).run(hashed, userId)
+  return { success: result.changes > 0 }
+}
+
+export function verifyUserSigningPin(
+  userId: number,
+  plainPin: string
+): { valid: boolean; error?: string; locked?: boolean; remainingAttempts?: number } {
+  const user = db.prepare('SELECT id, password, signingPinHash, pinFailedAttempts, pinLockedUntil FROM users WHERE id = ?').get(userId) as
+    | { id: number; password?: string; signingPinHash?: string; pinFailedAttempts?: number; pinLockedUntil?: string }
     | undefined
-  if (!record?.password) return false
-  return verifyPassword(plainPassword, record.password)
+
+  if (!user) return { valid: false, error: 'User not found' }
+
+  // Check lockout
+  const now = new Date()
+  if (user.pinLockedUntil && new Date(user.pinLockedUntil) > now) {
+    const diffMins = Math.ceil((new Date(user.pinLockedUntil).getTime() - now.getTime()) / 60000)
+    return {
+      valid: false,
+      locked: true,
+      error: `PIN temporarily locked due to multiple failed attempts. Try again in ${diffMins} min(s).`
+    }
+  }
+
+  const storedSecret = user.signingPinHash || user.password
+  const isValid = verifyPin(plainPin, storedSecret)
+
+  if (isValid) {
+    // Reset failed counter
+    db.prepare('UPDATE users SET pinFailedAttempts = 0, pinLockedUntil = NULL WHERE id = ?').run(userId)
+    return { valid: true }
+  } else {
+    // Increment failed attempts
+    const failed = (user.pinFailedAttempts || 0) + 1
+    const maxAttempts = 3
+    if (failed >= maxAttempts) {
+      const lockUntil = new Date(Date.now() + 15 * 60 * 1000).toISOString() // 15 mins lock
+      db.prepare('UPDATE users SET pinFailedAttempts = ?, pinLockedUntil = ? WHERE id = ?').run(failed, lockUntil, userId)
+      return {
+        valid: false,
+        locked: true,
+        remainingAttempts: 0,
+        error: 'Too many incorrect attempts! Signing PIN is locked for 15 minutes.'
+      }
+    } else {
+      db.prepare('UPDATE users SET pinFailedAttempts = ? WHERE id = ?').run(failed, userId)
+      return {
+        valid: false,
+        remainingAttempts: maxAttempts - failed,
+        error: `Incorrect PIN! ${maxAttempts - failed} attempt(s) remaining before security lockout.`
+      }
+    }
+  }
+}
+
+export function verifyUserPin(userId: number, plainPasswordOrPin: string): boolean {
+  const result = verifyUserSigningPin(userId, plainPasswordOrPin)
+  return result.valid
 }
 
 export function registerUser(user: User & { password?: string }) {
@@ -753,10 +846,18 @@ export function changeUserPassword(userId: number, newPassword: string) {
   return { success: result.changes > 0 }
 }
 
-export function getAllAssets() {
+export function getAllAssets(orgScope?: string) {
+  let query = 'SELECT *, (quantity * unitCost) as totalValue FROM assets'
+  const params: any[] = []
+  if (orgScope && orgScope !== '%' && orgScope !== 'all') {
+    query += ' WHERE orgPath LIKE ?'
+    params.push(`${orgScope}%`)
+  }
+  query += ' ORDER BY lastUpdated DESC'
+
   return db
-    .prepare('SELECT *, (quantity * unitCost) as totalValue FROM assets ORDER BY lastUpdated DESC')
-    .all()
+    .prepare(query)
+    .all(...params)
     .map((a: any) => {
       const derivedLifecycle =
         a.disposalStatus === 'Disposed' || a.condition === 'Disposed' ? 'Disposed' :
@@ -1231,23 +1332,56 @@ export function createPendingRequest(req: any) {
   return { success: true, id: result.lastInsertRowid }
 }
 
-export function getPendingRequests(status?: string) {
-  if (status && status !== 'All' && status !== 'all') return db.prepare(`SELECT * FROM pending_requests WHERE status = ? ORDER BY createdAt DESC`).all(status)
-  return db.prepare(`SELECT * FROM pending_requests ORDER BY createdAt DESC`).all()
+export function getPendingRequests(status?: string, orgScope?: string) {
+  let sql = 'SELECT * FROM pending_requests WHERE 1=1'
+  const params: any[] = []
+
+  if (status && status !== 'All' && status !== 'all') {
+    sql += ' AND status = ?'
+    params.push(status)
+  }
+
+  if (orgScope && orgScope !== '%' && orgScope !== 'all') {
+    sql += ' AND orgPath LIKE ?'
+    params.push(`${orgScope}%`)
+  }
+
+  sql += ' ORDER BY createdAt DESC'
+  return db.prepare(sql).all(...params)
 }
 
-export function reviewPendingRequest(id: number, action: string, reviewedBy: string, reviewNote?: string) {
+export function reviewPendingRequest(
+  id: number,
+  action: string,
+  reviewedBy: string,
+  reviewNote?: string,
+  signerUserId?: number
+) {
   const row = db.prepare(`SELECT * FROM pending_requests WHERE id = ?`).get(id) as any
   if (!row || row.status !== 'Pending') return { success: false, error: 'Not found or already reviewed' }
-  
+
   try {
+    let digitalSignature: string | null = null
+    const approvalTime = new Date().toISOString()
+
+    if (action === 'Approved') {
+      digitalSignature = generateDocumentSignature(row.payload, signerUserId || 0, reviewedBy)
+    }
+
     const runTransaction = db.transaction(() => {
-      db.prepare(`UPDATE pending_requests SET status=?, reviewedBy=?, reviewNote=?, reviewedAt=datetime('now') WHERE id=?`)
-        .run(action, reviewedBy, reviewNote || '', id)
+      db.prepare(`
+        UPDATE pending_requests 
+        SET status = ?, reviewedBy = ?, reviewNote = ?, reviewedAt = datetime('now'),
+            approvedByUserId = ?, digitalSignatureHash = ?, approvalTimestamp = ?
+        WHERE id = ?
+      `).run(action, reviewedBy, reviewNote || '', signerUserId || null, digitalSignature, approvalTime, id)
+
       if (action === 'Approved') {
         try {
           const payload = typeof row.payload === 'string' ? JSON.parse(row.payload) : row.payload
           if (payload && Array.isArray(payload.items) && payload.voucherNumber) {
+            payload.digitalSignatureHash = digitalSignature
+            payload.approvalTimestamp = approvalTime
             if (row.type === 'Requisition' || row.type === 'MODEL20') createVoucherM20(payload)
             else if (row.type === 'Stock-In' || row.type === 'MODEL19') createVoucherM19(payload)
             else if (row.type === 'Issue' || row.type === 'MODEL22') createVoucherM22(payload)
@@ -1258,7 +1392,7 @@ export function reviewPendingRequest(id: number, action: string, reviewedBy: str
       }
     })
     runTransaction()
-    return { success: true }
+    return { success: true, digitalSignature, approvalTime }
   } catch (err: any) {
     console.error('Review error:', err)
     return { success: false, error: err.message || 'Error processing request' }

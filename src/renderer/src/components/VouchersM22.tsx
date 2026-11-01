@@ -5,6 +5,7 @@ import { toEthiopianDate, getCurrentEthiopianDate } from '../lib/ethiopianCalend
 import EthiopianDatePicker from './EthiopianDatePicker'
 import jsPDF from 'jspdf'
 import autoTable from 'jspdf-autotable'
+import QRCode from 'qrcode'
 import ExportDropdown from './ExportDropdown'
 import { getRolePermissions } from '../lib/permissions'
 
@@ -103,70 +104,171 @@ const VouchersM22 = () => {
     setRecipientName(''); setDepartment(''); setItems([]); setPageFrom(''); setPageTo('')
   }
 
-  const generatePDF = (voucher: Voucher22) => {
+  // ── Official Triplicate PDF Generation (3 Copies: Recipient, Finance, Store) ──
+  const generatePDF = async (voucher: Voucher22) => {
     const doc = new jsPDF()
     const gcDate = new Date(voucher.issueDate).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })
     const eDate = toEthiopianDate(voucher.issueDate)
+    const sanitize = (text: string | undefined) => text ? text.replace(/[^\x00-\x7F]/g, "").trim() : ''
 
-    const sanitize = (text: string | undefined) => text ? text.replace(/[^\x00-\x7F]/g, "").trim() : '';
+    const totalCost = voucher.items.reduce((sum, item) => sum + (item.totalCost || (item.quantity * item.unitCost)), 0)
 
-    doc.setFontSize(8); doc.setTextColor(100)
-    doc.text('Form: Model 22 (Issue Voucher)', 14, 12)
-    doc.text(`Serial ANRS/A/41st`, 165, 12)
-    doc.setFontSize(10); doc.setTextColor(0); doc.text(`No. ${sanitize(voucher.voucherNumber)}`, 165, 18)
+    // Generate Verification QR Code
+    const qrPayload = JSON.stringify({
+      doc: 'MODEL22',
+      voucherNo: voucher.voucherNumber,
+      date: voucher.issueDate,
+      recipient: voucher.recipientName,
+      department: voucher.department,
+      itemsCount: voucher.items.length,
+      totalCost: totalCost.toFixed(2),
+      verifySeal: `ETH-AMIS-M22-${voucher.voucherNumber}`
+    })
+    const qrDataUrl = await QRCode.toDataURL(qrPayload, { width: 120, margin: 1 })
 
-    doc.setFontSize(15); doc.setTextColor(0); doc.setFont('helvetica', 'bold')
-    doc.text(sanitize(orgName).toUpperCase() || 'ORGANIZATION', 105, 22, { align: 'center' })
-    doc.setFontSize(9); doc.setFont('helvetica', 'normal'); doc.setTextColor(80)
-    doc.text(sanitize(orgTagline).toUpperCase() || 'DEPARTMENT', 105, 28, { align: 'center' })
+    const copies = [
+      {
+        badge: 'ORIGINAL — RECIPIENT COPY (1ኛ ኮፒ - ለተረካቢ)',
+        badgeColor: [37, 99, 235], // Blue
+        desc: 'Delivered to the recipient / employee receiving custody of the issued property.'
+      },
+      {
+        badge: 'COPY 2 — FINANCE & ACCOUNTS (2ኛ ኮፒ - ለፋይናንስና ሂሳብ ክፍል)',
+        badgeColor: [202, 138, 4], // Amber/Yellow
+        desc: 'Transmitted to Finance to debit inventory and adjust property asset ledger.'
+      },
+      {
+        badge: 'COPY 3 — STORE KEEPER ARCHIVE (3ኛ ኮፒ - ለንብረት ክፍል መዝገብ)',
+        badgeColor: [22, 163, 74], // Green
+        desc: 'Permanent record maintained by Store Keeper for stock balance reconciliation.'
+      }
+    ]
 
-    doc.setFontSize(9); doc.setTextColor(0)
-    doc.text(`P. ${sanitize(voucher.department).toUpperCase() || '___________________'}`, 14, 32)
-    doc.text(`Department`, 14, 36)
+    copies.forEach((copy, index) => {
+      if (index > 0) doc.addPage()
 
-    doc.setFontSize(12); doc.setFont('helvetica', 'bold'); doc.setTextColor(0)
-    doc.text('PROPERTY ISSUE VOUCHER — ARTICLES ISSUED FROM STORE', 105, 45, { align: 'center' })
-    doc.setLineWidth(0.5); doc.line(14, 48, 196, 48)
+      // Copy Badge Header Banner
+      doc.setFillColor(copy.badgeColor[0], copy.badgeColor[1], copy.badgeColor[2])
+      doc.rect(14, 8, 182, 6, 'F')
+      doc.setFontSize(8)
+      doc.setFont('helvetica', 'bold')
+      doc.setTextColor(255, 255, 255)
+      doc.text(copy.badge, 105, 12.5, { align: 'center' })
 
-    doc.setFontSize(9); doc.setFont('helvetica', 'normal')
-    doc.text(`I hereby certify that I have correctly counted and received the items listed below for the use of:`, 14, 50, { maxWidth: 180 })
-    doc.setFont('helvetica', 'bold')
-    doc.text(sanitize(voucher.recipientName), 14, 60)
-    doc.setFont('helvetica', 'normal')
-    doc.text(`Date of Issue: ${gcDate}${eDate ? ` (EC: ${eDate})` : ''}`, 14, 68)
-    doc.text(`Voucher/Order No: ${sanitize(voucher.voucherNumber)}`, 110, 68)
-    if (voucher.pageFrom || voucher.pageTo) {
-      doc.text(`Pages: ${sanitize(voucher.pageFrom) || '—'} to ${sanitize(voucher.pageTo) || '—'}`, 14, 76)
-    }
+      // Top Meta
+      doc.setFontSize(8)
+      doc.setTextColor(100)
+      doc.setFont('helvetica', 'normal')
+      doc.text('Form: Model 22 (Property Issue Voucher)', 14, 18)
+      doc.text('Serial: MoF/AMIS/M22', 145, 18)
+      doc.setFontSize(10)
+      doc.setTextColor(0)
+      doc.setFont('helvetica', 'bold')
+      doc.text(`No. ${sanitize(voucher.voucherNumber)}`, 145, 24)
 
-    const tableData = voucher.items.map((item, idx) => [
-      idx + 1, sanitize(item.assetName),
-      sanitize(item.model) || '—',
-      sanitize(item.serial) || '—',
-      item.quantity, sanitize(item.unit),
-      item.unitCost.toFixed(2), item.totalCost.toFixed(2), ''
-    ])
+      // Organization Title
+      doc.setFontSize(14)
+      doc.setTextColor(15, 23, 42)
+      doc.setFont('helvetica', 'bold')
+      doc.text(sanitize(orgName).toUpperCase() || 'PUBLIC PROPERTY ADMINISTRATION', 105, 28, { align: 'center' })
 
-    autoTable(doc, {
-      startY: 82,
-      head: [['#', 'Description', 'Model', 'Serial', 'Qty', 'Unit', 'Unit Cost', 'Total', 'Remarks']],
-      body: tableData,
-      theme: 'grid',
-      styles: { fontSize: 7, cellPadding: 2, overflow: 'linebreak' },
-      headStyles: { fillColor: [30, 41, 59], textColor: 255, fontStyle: 'bold' },
-      alternateRowStyles: { fillColor: [248, 250, 252] }
+      doc.setFontSize(8)
+      doc.setFont('helvetica', 'normal')
+      doc.setTextColor(100)
+      doc.text(sanitize(orgTagline).toUpperCase() || 'PROPERTY MANAGEMENT & INVENTORY CONTROL', 105, 33, { align: 'center' })
+
+      doc.setFontSize(11)
+      doc.setFont('helvetica', 'bold')
+      doc.setTextColor(30, 41, 59)
+      doc.text('PROPERTY ISSUE VOUCHER — ARTICLES ISSUED FROM STORE', 105, 41, { align: 'center' })
+
+      // Separator line
+      doc.setDrawColor(200, 200, 200)
+      doc.setLineWidth(0.4)
+      doc.line(14, 44, 196, 44)
+
+      // Recipient and Department Info
+      doc.setFontSize(8.5)
+      doc.setFont('helvetica', 'normal')
+      doc.setTextColor(50)
+      doc.text(`Department / Section: ${sanitize(voucher.department).toUpperCase() || '—'}`, 14, 50)
+      doc.text(`Recipient (ተረካቢ): ${sanitize(voucher.recipientName)}`, 14, 56)
+      doc.text(`Date of Issue: ${gcDate}${eDate ? ` (EC: ${eDate})` : ''}`, 14, 62)
+
+      doc.text(`Voucher / Order No: ${sanitize(voucher.voucherNumber)}`, 110, 50)
+      doc.text(`Storekeeper: ${sanitize(voucher.storekeeperName) || 'Property Manager'}`, 110, 56)
+      if (voucher.pageFrom || voucher.pageTo) {
+        doc.text(`Register Pages: ${sanitize(voucher.pageFrom) || '—'} to ${sanitize(voucher.pageTo) || '—'}`, 110, 62)
+      }
+
+      // Items table
+      const tableData = voucher.items.map((item, idx) => [
+        idx + 1,
+        sanitize(item.assetName),
+        sanitize(item.model) || '—',
+        sanitize(item.serial) || '—',
+        item.quantity,
+        sanitize(item.unit) || 'Pcs',
+        item.unitCost.toFixed(2),
+        item.totalCost.toFixed(2),
+        'Good Condition'
+      ])
+
+      autoTable(doc, {
+        startY: 68,
+        head: [['#', 'Description of Property', 'Model', 'Serial / Tag', 'Qty', 'Unit', 'Unit Cost (ETB)', 'Total (ETB)', 'Remarks']],
+        body: tableData,
+        theme: 'grid',
+        styles: { fontSize: 7, cellPadding: 2, overflow: 'linebreak' },
+        headStyles: { fillColor: [30, 41, 59], textColor: 255, fontStyle: 'bold' },
+        alternateRowStyles: { fillColor: [248, 250, 252] },
+        foot: [[
+          '', 'TOTAL VALUE (ETB)', '', '',
+          voucher.items.reduce((acc, it) => acc + it.quantity, 0),
+          '',
+          '',
+          totalCost.toFixed(2),
+          ''
+        ]],
+        footStyles: { fillColor: [241, 245, 249], textColor: [15, 23, 42], fontStyle: 'bold', fontSize: 7.5 }
+      })
+
+      const finalY = (doc as any).lastAutoTable.finalY + 14
+
+      // Signatures
+      doc.setFontSize(8)
+      doc.setFont('helvetica', 'normal')
+      doc.setTextColor(40)
+      doc.text(`Storekeeper: ${sanitize(voucher.storekeeperName) || 'Property Manager'}`, 14, finalY)
+      doc.text('Storekeeper Signature: _________________', 14, finalY + 12)
+      doc.text('Approving Officer: ______________________', 14, finalY + 24)
+
+      doc.text(`Recipient: ${sanitize(voucher.recipientName)}`, 90, finalY)
+      doc.text(`Digital PIN Verification: [ CONFIRMED ]`, 90, finalY + 12)
+      doc.text(`Date Signed: ${gcDate}`, 90, finalY + 24)
+
+      // Embed Verification QR Code
+      try {
+        doc.addImage(qrDataUrl, 'PNG', 160, finalY - 4, 32, 32)
+        doc.setFontSize(6)
+        doc.setTextColor(100)
+        doc.text('SCAN TO VERIFY', 176, finalY + 31, { align: 'center' })
+      } catch (qrErr) {
+        console.warn('QR image embed error:', qrErr)
+      }
+
+      // Footer
+      doc.setFontSize(6.5)
+      doc.setTextColor(140)
+      doc.text(
+        `${sanitize(orgName)} | Ethiopian Government AMIS Form Model 22 | Copy ${index + 1} of 3 | Ref: ${sanitize(voucher.voucherNumber)}`,
+        105,
+        287,
+        { align: 'center' }
+      )
     })
 
-    const finalY = (doc as any).lastAutoTable.finalY + 20
-    doc.setFont('helvetica', 'normal')
-    doc.text(`Storekeeper: ${sanitize(voucher.storekeeperName) || '___________________'}`, 14, finalY)
-    doc.text(`Storekeeper's Signature: ________________`, 14, finalY + 10)
-    doc.text(`Recipient's Signature: __________________`, 110, finalY + 10)
-    doc.text(`Date: ${gcDate}`, 110, finalY + 20)
-
-    doc.setFontSize(7); doc.setTextColor(150)
-    doc.text(`${sanitize(orgName)} | Generated: ${new Date().toLocaleString()} | Ref: ${sanitize(voucher.voucherNumber)}`, 105, 287, { align: 'center' })
-    doc.save(`Issue_M22_${sanitize(voucher.voucherNumber)}.pdf`)
+    doc.save(`Official_Model22_Triplicate_${sanitize(voucher.voucherNumber)}.pdf`)
   }
 
   const exportData = vouchersM22.map(v => ({

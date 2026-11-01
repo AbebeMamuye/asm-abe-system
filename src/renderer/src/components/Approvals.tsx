@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react'
-import { CheckCircle2, XCircle, Clock, ClipboardList, RefreshCw, ChevronDown, ChevronUp, ShieldCheck, Eye, EyeOff } from 'lucide-react'
-import { useStore, TRANSLATIONS } from '../store/useStore'
+import { CheckCircle2, XCircle, Clock, ClipboardList, RefreshCw, ChevronDown, ChevronUp, ShieldCheck, Eye, EyeOff, Lock, KeyRound } from 'lucide-react'
+import { useStore, TRANSLATIONS, callAPI } from '../store/useStore'
 import ExportDropdown from './ExportDropdown'
 import jsPDF from 'jspdf'
 import autoTable from 'jspdf-autotable'
@@ -18,6 +18,9 @@ interface PendingRequest {
   reviewNote?: string
   createdAt: string
   reviewedAt?: string
+  digitalSignatureHash?: string
+  approvalTimestamp?: string
+  approvedByUserId?: number
 }
 
 const STATUS_COLOR = {
@@ -36,7 +39,7 @@ const getStatusLabel = (status: string) => {
 }
 
 const Approvals = () => {
-  const { user, language } = useStore()
+  const { user, language, reviewPendingRequest: storeReview } = useStore()
   const t = TRANSLATIONS[language]
   const [requests, setRequests] = useState<PendingRequest[]>([])
   const [isLoading, setIsLoading] = useState(true)
@@ -49,14 +52,23 @@ const Approvals = () => {
   const [pinInput, setPinInput] = useState('')
   const [pinError, setPinError] = useState('')
   const [showPinPassword, setShowPinPassword] = useState(false)
+  const [remainingAttempts, setRemainingAttempts] = useState<number | null>(null)
 
   const fetchRequests = async () => {
     setIsLoading(true)
-    if (window.api) {
-      const data = await window.api.getPendingRequests(filter || undefined) as PendingRequest[]
-      setRequests(data || [])
+    try {
+      if (window.api) {
+        const data = await window.api.getPendingRequests(filter || undefined) as PendingRequest[]
+        setRequests(data || [])
+      } else {
+        const data = await callAPI(`/pending${filter && filter !== 'All' ? '?status=' + filter : ''}`)
+        setRequests(data || [])
+      }
+    } catch (err) {
+      console.error('Failed to fetch requests:', err)
+    } finally {
+      setIsLoading(false)
     }
-    setIsLoading(false)
   }
 
   useEffect(() => { fetchRequests() }, [filter])
@@ -66,33 +78,60 @@ const Approvals = () => {
     setShowPinModal(true)
     setPinInput('')
     setPinError('')
+    setRemainingAttempts(null)
   }
 
   const handleVerifyAndSubmit = async () => {
     if (!pendingAction || !user) return
-    
-    const valid = window.api?.verifyPin
-      ? await window.api.verifyPin(user.id!, pinInput)
-      : false
-    if (!valid) {
-      setPinError(language === 'AM' ? 'የተሳሳተ የይለፍ ቃል!' : 'Invalid Security PIN/Password!')
+    if (!pinInput.trim()) {
+      setPinError(language === 'AM' ? 'እባክዎ የማረጋገጫ ፒን ያስገቡ!' : 'Please enter security PIN!')
       return
     }
 
-    setProcessingId(pendingAction.id)
-    setShowPinModal(false)
-    
-    if (window.api) {
-      await window.api.reviewPendingRequest(
-        pendingAction.id, 
-        pendingAction.action, 
-        user.name, 
-        reviewNote[pendingAction.id] || ''
-      )
+    try {
+      let verifyResult: { valid: boolean; error?: string; remainingAttempts?: number; locked?: boolean }
+      if (window.api?.verifyPin) {
+        const ok = await window.api.verifyPin(user.id!, pinInput)
+        verifyResult = { valid: ok }
+      } else {
+        verifyResult = await callAPI('/auth/verify-pin', 'POST', { userId: user.id, pin: pinInput })
+      }
+
+      if (!verifyResult.valid) {
+        setPinError(verifyResult.error || (language === 'AM' ? 'የተሳሳተ የዲጂታል ፊርማ ፒን!' : 'Invalid Security PIN!'))
+        if (verifyResult.remainingAttempts !== undefined) {
+          setRemainingAttempts(verifyResult.remainingAttempts)
+        }
+        return
+      }
+
+      setProcessingId(pendingAction.id)
+      setShowPinModal(false)
+
+      if (window.api) {
+        await window.api.reviewPendingRequest(
+          pendingAction.id,
+          pendingAction.action,
+          user.name,
+          reviewNote[pendingAction.id] || '',
+          user.id
+        )
+      } else {
+        await storeReview(
+          pendingAction.id,
+          pendingAction.action,
+          user.name,
+          reviewNote[pendingAction.id] || '',
+          user.id
+        )
+      }
+
       await fetchRequests()
+      setProcessingId(null)
+      setPendingAction(null)
+    } catch (e: any) {
+      setPinError(e.message || 'Error processing review')
     }
-    setProcessingId(null)
-    setPendingAction(null)
   }
 
   const perms = getRolePermissions(user?.role)
@@ -253,8 +292,15 @@ const Approvals = () => {
 
                       <td className="px-4 py-3 border-2 border-slate-900 dark:border-slate-700 text-xs text-slate-500 max-w-xs">
                         {req.reviewedBy && (
-                          <div className="font-bold text-slate-700 dark:text-slate-300">
-                            By {req.reviewedBy}
+                          <div>
+                            <div className="font-bold text-slate-700 dark:text-slate-300">
+                              By {req.reviewedBy}
+                            </div>
+                            {req.digitalSignatureHash && (
+                              <div className="inline-flex items-center gap-1 mt-1 px-2 py-0.5 rounded bg-emerald-50 dark:bg-emerald-950/40 text-[9px] font-mono font-bold text-emerald-700 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-800" title={req.digitalSignatureHash}>
+                                🔒 {req.digitalSignatureHash.substring(0, 16)}...
+                              </div>
+                            )}
                           </div>
                         )}
                         {req.reviewNote ? (
@@ -315,29 +361,39 @@ const Approvals = () => {
       {showPinModal && (
         <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-slate-900/80 backdrop-blur-md animate-in fade-in duration-300">
           <div className="bg-white dark:bg-slate-900 w-full max-w-md rounded-[2.5rem] p-8 shadow-2xl border border-slate-200 dark:border-slate-800 text-center space-y-5">
-            <div className="bg-amber-100 dark:bg-amber-900/30 w-16 h-16 rounded-3xl flex items-center justify-center text-amber-600 mx-auto shadow-inner">
-              <ShieldCheck size={32} />
+            <div className="w-16 h-16 rounded-3xl flex items-center justify-center mx-auto shadow-inner bg-gradient-to-tr from-blue-600 to-indigo-600 text-white shadow-blue-500/30">
+              <KeyRound size={32} />
             </div>
             <div>
-              <h3 className="text-xl font-black text-slate-900 dark:text-white uppercase tracking-tight">Digital Signature Verification</h3>
-              <p className="text-xs text-slate-500 font-bold mt-1 uppercase tracking-wider">
-                {language === 'AM' ? 'ይህንን ውሳኔ ለማጽደቅ የማረጋገጫ ይለፍ ቃልዎን ያስገቡ' : `Confirm your identity to authorize this ${pendingAction?.action} action`}
+              <h3 className="text-xl font-black text-slate-900 dark:text-white uppercase tracking-tight">
+                {language === 'AM' ? 'የዲጂታል ፊርማ ማረጋገጫ (Security PIN)' : 'Digital Signature PIN Authorization'}
+              </h3>
+              <p className="text-xs text-slate-500 font-bold mt-1 tracking-wide">
+                {language === 'AM'
+                  ? `ይህንን ውሳኔ [${pendingAction?.action === 'Approved' ? 'ማፅደቅ' : 'ውድቅ ማድረግ'}] በይፋ ለመፈረም የእርስዎን ፒን ያስገቡ`
+                  : `Enter your 4-6 digit authorization PIN to digitally sign and seal this ${pendingAction?.action} action`}
               </p>
               {user && (
-                <div className="inline-block mt-2 px-3 py-1 rounded-full bg-slate-100 dark:bg-slate-800 text-[11px] font-bold text-slate-700 dark:text-slate-300">
-                  {language === 'AM' ? 'ፈቃጅ ባለስልጣን፦ ' : 'Signing Approver: '}<span className="text-blue-600 font-black">{user.name}</span>
+                <div className="inline-flex items-center gap-2 mt-3 px-3.5 py-1.5 rounded-full bg-blue-50 dark:bg-blue-900/30 border border-blue-200 dark:border-blue-800 text-[11px] font-bold text-slate-700 dark:text-slate-300">
+                  <ShieldCheck size={14} className="text-blue-600 shrink-0" />
+                  <span>{language === 'AM' ? 'ፈራሚ ባለስልጣን፦ ' : 'Signer: '}<strong>{user.name}</strong> ({user.role})</span>
                 </div>
               )}
             </div>
             
-            <div className="space-y-2">
+            <div className="space-y-3">
               <div className="relative">
                 <input
                   type={showPinPassword ? 'text' : 'password'}
-                  placeholder={language === 'AM' ? 'የመግቢያ የይለፍ ቃል ያስገቡ' : 'Enter Account Password'}
-                  className="w-full px-5 py-3.5 pr-12 rounded-2xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-center font-bold text-base outline-none focus:ring-4 focus:ring-blue-500/20 transition-all"
+                  inputMode="numeric"
+                  maxLength={12}
+                  placeholder="••••••"
+                  className="w-full px-5 py-4 pr-12 rounded-2xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-center font-mono font-black text-2xl tracking-[0.4em] outline-none focus:ring-4 focus:ring-blue-500/20 transition-all placeholder:tracking-normal placeholder:font-sans placeholder:text-base placeholder:text-slate-400"
                   value={pinInput}
-                  onChange={(e) => setPinInput(e.target.value)}
+                  onChange={(e) => {
+                    setPinInput(e.target.value)
+                    setPinError('')
+                  }}
                   autoFocus
                   onKeyDown={(e) => e.key === 'Enter' && handleVerifyAndSubmit()}
                 />
@@ -349,21 +405,39 @@ const Approvals = () => {
                   {showPinPassword ? <EyeOff size={18} /> : <Eye size={18} />}
                 </button>
               </div>
-              {pinError && <p className="text-xs font-black text-red-500 animate-bounce">{pinError}</p>}
+
+              {pinError && (
+                <div className="p-2.5 rounded-xl bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-900/40 text-xs font-bold text-red-600 dark:text-red-400">
+                  {pinError}
+                </div>
+              )}
+
+              {remainingAttempts !== null && remainingAttempts > 0 && (
+                <p className="text-[11px] font-bold text-amber-600 dark:text-amber-400">
+                  ⚠️ {remainingAttempts} {language === 'AM' ? 'የመጨረሻ ሙከራ(ዎች) ቀርተዋል' : 'attempt(s) remaining before security lockout'}
+                </p>
+              )}
+
+              <p className="text-[10px] text-slate-400 font-medium">
+                {language === 'AM' ? '🔒 ፊርማው በ SHA-256 HMAC ዲጂታል ማህተም ይመዘገባል' : '🔒 Approval will be sealed with a verifiable SHA-256 HMAC digital signature'}
+              </p>
             </div>
 
             <div className="flex gap-4 pt-2">
               <button 
+                type="button"
                 onClick={() => setShowPinModal(false)}
-                className="flex-1 py-3.5 rounded-2xl border border-slate-200 text-slate-500 font-bold hover:bg-slate-50 transition-all cursor-pointer"
+                className="flex-1 py-3.5 rounded-2xl border border-slate-200 dark:border-slate-700 text-slate-500 dark:text-slate-400 font-bold hover:bg-slate-50 dark:hover:bg-slate-800 transition-all cursor-pointer"
               >
                 {t.cancel}
               </button>
               <button 
+                type="button"
                 onClick={handleVerifyAndSubmit}
-                className="flex-1 py-3.5 rounded-2xl bg-slate-900 text-white font-black hover:bg-slate-800 shadow-xl shadow-slate-900/30 transition-all cursor-pointer"
+                disabled={!pinInput.trim()}
+                className="flex-1 py-3.5 rounded-2xl bg-gradient-to-r from-blue-600 to-indigo-600 text-white font-black hover:opacity-95 shadow-xl shadow-blue-600/30 transition-all cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                Sign & Confirm
+                {language === 'AM' ? 'በዲጂታል ፈርም' : 'Sign & Seal'}
               </button>
             </div>
           </div>
