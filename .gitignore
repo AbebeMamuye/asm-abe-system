@@ -12,3 +12,6 @@ data/*.db
 data/*.db-journal
 data/*.db-wal
 data/*.db-shm
+
+node_modules_old
+default-app/node_modules
