@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import React, { useState, useEffect } from 'react'
 import {
   ArrowRight,
   KeyRound,
@@ -14,8 +14,13 @@ import { useStore, TRANSLATIONS } from '../store/useStore'
 import asmLogo from '../assets/asm-logo.jpg'
 
 const Login = () => {
-  const { login, changePassword, language, setLanguage, orgName, orgTagline } = useStore()
+  const { login, changePassword, language, setLanguage, orgName, orgTagline, fetchSystemSettings } = useStore()
   const t = TRANSLATIONS[language]
+
+  // Fetch org branding from server DB on mount (works before login)
+  useEffect(() => {
+    fetchSystemSettings().catch(() => {})
+  }, [])
 
   const [username, setUsername] = useState('')
   const [password, setPassword] = useState('')
@@ -120,10 +125,10 @@ const Login = () => {
 
             <div>
               <h1 className="text-3xl lg:text-4xl font-black leading-tight tracking-tight uppercase">
-                {language === 'AM' ? 'የአዲስ አበባ ከተማ አስተዳደር' : 'Addis Ababa City Administration'}
+                {orgName || (language === 'AM' ? 'የአዲስ አበባ ከተማ አስተዳደር' : 'Addis Ababa City Administration')}
               </h1>
               <p className="text-blue-400 font-bold text-sm mt-1 uppercase tracking-wider">
-                {language === 'AM' ? 'የመንግስት ንብረት አስተዳደር ባለስልጣን' : 'Public Property Administration Authority'}
+                {orgTagline || (language === 'AM' ? 'የመንግስት ንብረት አስተዳደር ባለስልጣን' : 'Public Property Administration Authority')}
               </p>
             </div>
 

@@ -526,11 +526,25 @@ export const useStore = create<AppState>((set, get) => ({
   setOrgName: (name) => {
     set({ orgName: name })
     localStorage.setItem('orgName', name)
+    try {
+      if ((window as any).api?.setSystemSetting) {
+        ;(window as any).api.setSystemSetting('orgName', name)
+      } else {
+        callAPI('/system/settings', 'POST', { key: 'orgName', value: name }).catch(() => {})
+      }
+    } catch (_) {}
   },
 
   setOrgTagline: (tagline) => {
     set({ orgTagline: tagline })
     localStorage.setItem('orgTagline', tagline)
+    try {
+      if ((window as any).api?.setSystemSetting) {
+        ;(window as any).api.setSystemSetting('orgTagline', tagline)
+      } else {
+        callAPI('/system/settings', 'POST', { key: 'orgTagline', value: tagline }).catch(() => {})
+      }
+    } catch (_) {}
   },
 
   setOrganizationMode: async (mode: 'single' | 'hierarchical', type?: string) => {
@@ -568,6 +582,14 @@ export const useStore = create<AppState>((set, get) => ({
       if (settings?.singleOrgType) {
         set({ singleOrgType: settings.singleOrgType })
         localStorage.setItem('ams_single_org_type', settings.singleOrgType)
+      }
+      if (settings?.orgName) {
+        set({ orgName: settings.orgName })
+        localStorage.setItem('orgName', settings.orgName)
+      }
+      if (settings?.orgTagline) {
+        set({ orgTagline: settings.orgTagline })
+        localStorage.setItem('orgTagline', settings.orgTagline)
       }
     } catch (err) {
       console.warn('Failed to fetch system settings:', err)

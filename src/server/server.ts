@@ -210,13 +210,17 @@ const possibleDistPaths = [
 const webRoot = possibleDistPaths.find((p) => existsSync(join(p, 'index.html'))) || join(process.cwd(), 'dist')
 
 console.log('[AMS] Serving web client from:', webRoot)
-app.use(express.static(webRoot))
+// Serve static assets (JS/CSS/images) with caching; but never cache index.html
+app.use(express.static(webRoot, { index: false }))
 
-// SPA Fallback for client-side routing
+// SPA Fallback — always serve fresh index.html (no browser cache)
 app.use((req, res, next) => {
   if (req.method === 'GET' && !req.path.startsWith('/api/')) {
     const indexPath = join(webRoot, 'index.html')
     if (existsSync(indexPath)) {
+      res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate')
+      res.setHeader('Pragma', 'no-cache')
+      res.setHeader('Expires', '0')
       return res.sendFile(indexPath)
     }
   }
