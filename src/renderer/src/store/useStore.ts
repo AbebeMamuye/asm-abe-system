@@ -397,7 +397,7 @@ const DEFAULT_ORG = {
 const getInitialOrgName = (): string => {
   try {
     const stored = localStorage.getItem('orgName')
-    if (!stored || stored === OLD_DEFAULT_ORG_NAME || stored.includes('የአዲስ አበባ ከተማ አስተዳደር')) {
+    if (!stored || stored === OLD_DEFAULT_ORG_NAME || stored.includes('የአዲስ አበባ') || stored.includes('አቃቂ ቃሊቲ') || stored.includes('ከተማ አስተዳደር')) {
       return DEFAULT_ORG.name
     }
     return stored
@@ -597,7 +597,7 @@ export const useStore = create<AppState>((set, get) => ({
         localStorage.setItem('ams_single_org_type', settings.singleOrgType)
       }
       if (settings?.orgName) {
-        const cleanName = settings.orgName.includes('የአዲስ አበባ ከተማ አስተዳደር')
+        const cleanName = (settings.orgName.includes('የአዲስ አበባ') || settings.orgName.includes('አቃቂ ቃሊቲ') || settings.orgName.includes('ከተማ አስተዳደር'))
           ? DEFAULT_ORG.name
           : settings.orgName
         set({ orgName: cleanName })

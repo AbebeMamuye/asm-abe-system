@@ -125,7 +125,7 @@ const Login = () => {
 
             <div>
               <h1 className="text-3xl lg:text-4xl font-black leading-tight tracking-tight uppercase">
-                {orgName && !orgName.includes('የአዲስ አበባ ከተማ አስተዳደር')
+                {orgName && !orgName.includes('የአዲስ አበባ') && !orgName.includes('አቃቂ ቃሊቲ') && !orgName.includes('ከተማ አስተዳደር')
                   ? orgName
                   : (language === 'AM' ? 'የንብረት አስተዳደር መቆጣጠሪያ ስርዓት' : 'Asset Management System')}
               </h1>

@@ -597,11 +597,11 @@ export function initDatabase() {
   insertSetting.run('orgName', 'የንብረት አስተዳደር መቆጣጠሪያ ስርዓት')
   insertSetting.run('orgTagline', 'AMIS — ኃላፊነት፣ ግልፅነት እና ቁጥጥር!')
 
-  // If old Addis Ababa text exists in system_settings, update it to 'የንብረት አስተዳደር መቆጣጠሪያ ስርዓት'
+  // If old Addis Ababa or legacy text exists in system_settings, update to new default
   db.prepare(`
     UPDATE system_settings
     SET value = 'የንብረት አስተዳደር መቆጣጠሪያ ስርዓት'
-    WHERE key = 'orgName' AND (value LIKE '%የአዲስ አበባ ከተማ አስተዳደር%' OR value = '')
+    WHERE key = 'orgName' AND (value LIKE '%የአዲስ አበባ%' OR value LIKE '%አቃቂ ቃሊቲ%' OR value LIKE '%ከተማ አስተዳደር%' OR value = '')
   `).run()
 
   seedAmisData()
