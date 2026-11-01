@@ -76,7 +76,7 @@ const VouchersM19 = () => {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    
+
     if (!receivedFrom.trim()) {
       alert(language === 'AM' ? 'እባክዎን የተቀበሉበትን ስም ያስገቡ!' : 'Please enter who you received from!')
       return
