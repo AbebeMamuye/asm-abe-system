@@ -1,0 +1,17 @@
+services:
+  amis-app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: amis-system
+    restart: unless-stopped
+    ports:
+      - "5002:5002"
+    environment:
+      - NODE_ENV=production
+      - PORT=5002
+      - AMS_PORT=5002
+    volumes:
+      # Persists your SQLite database on the host machine
+      - ./data:/app/data
+

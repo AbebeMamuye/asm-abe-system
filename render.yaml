@@ -1,0 +1,17 @@
+services:
+  - type: web
+    name: asm-abe
+    runtime: node
+    buildCommand: npm install && npm run web:build
+    startCommand: node dist-server/server.js
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 5002
+      - key: AMS_PORT
+        value: 5002
+    disk:
+      name: asm-data
+      mountPath: /app/data
+      sizeGB: 1

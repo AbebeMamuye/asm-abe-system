@@ -1,0 +1,402 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+// ============================================================================
+// ASSET MANAGEMENT MODELS
+// ============================================================================
+
+model Item {
+  id                  String           @id @default(cuid())
+  name                String
+  description         String?
+  category            String
+  unit                String
+  quantity            Int              @default(0)
+  reorderLevel        Int              @default(10)
+  condition           String           @default("FUNCTIONAL") // FUNCTIONAL, MAINTENANCE, DAMAGED, DISPOSED
+  status              String           @default("ACTIVE") // ACTIVE, ARCHIVED
+  location            String?
+  modelNumber         String?
+  serialNumber        String?          @unique
+  manufacturer        String?
+  purchaseDate        DateTime?
+  purchasePrice       Float?
+  warrantyExpiry      DateTime?
+  lastMaintenanceDate DateTime?
+  barcode             String?          @unique
+  qrCode              String?
+  tags                String?          // JSON array of tags
+  notes               String?
+  
+  // Audit fields
+  createdAt           DateTime         @default(now())
+  updatedAt           DateTime         @updatedAt
+  createdBy           String?
+  updatedBy           String?
+  
+  // Relations
+  transactions        Transaction[]
+  maintenanceLogs     MaintenanceLog[]
+  
+  @@index([category])
+  @@index([condition])
+  @@index([status])
+  @@index([serialNumber])
+}
+
+model Transaction {
+  id                  String   @id @default(cuid())
+  type                String   // "IN" or "OUT"
+  quantity            Int
+  
+  // Financial details
+  unitPrice           Float?
+  totalPrice          Float?
+  currency            String   @default("ETB")
+  
+  // Stock-In (Model 19) specific
+  supplier            String?
+  purchaseOrderNumber String?
+  invoiceNumber       String?
+  
+  // Stock-Out (Model 20) specific
+  department          String?
+  requisitionNumber   String?
+  recipientName       String?
+  recipientSignature  String?
+  
+  // Common fields
+  voucherNumber       String?  @unique
+  referenceNumber     String?
+  date                DateTime @default(now())
+  remarks             String?
+  approvedBy          String?
+  approvalDate        DateTime?
+  status              String   @default("COMPLETED") // PENDING, APPROVED, COMPLETED, CANCELLED
+  
+  // Audit fields
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+  createdBy           String?
+  processedBy         String?
+  
+  // Relations
+  itemId              String
+  item                Item     @relation(fields: [itemId], references: [id], onDelete: Restrict)
+  
+  @@index([type])
+  @@index([date])
+  @@index([status])
+  @@index([voucherNumber])
+}
+
+model MaintenanceLog {
+  id                String    @id @default(cuid())
+  maintenanceType   String    // PREVENTIVE, CORRECTIVE, CALIBRATION, INSPECTION
+  description       String
+  findings          String?
+  actionTaken       String?
+  
+  // Personnel
+  technicianName    String?
+  technicianContact String?
+  performedBy       String?
+  
+  // Schedule
+  scheduledDate     DateTime?
+  startDate         DateTime?
+  completionDate    DateTime  @default(now())
+  nextDueDate       DateTime?
+  
+  // Cost
+  cost              Float?
+  laborCost         Float?
+  partsCost         Float?
+  currency          String    @default("ETB")
+  
+  // Parts & materials
+  partsReplaced     String?   // JSON array
+  
+  // Status
+  status            String    @default("COMPLETED") // SCHEDULED, IN_PROGRESS, COMPLETED, CANCELLED
+  priority          String    @default("NORMAL") // LOW, NORMAL, HIGH, CRITICAL
+  
+  // Documents
+  attachments       String?   // JSON array of file paths
+  
+  // Audit fields
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+  createdBy         String?
+  
+  // Relations
+  itemId            String
+  item              Item      @relation(fields: [itemId], references: [id], onDelete: Restrict)
+  
+  @@index([itemId])
+  @@index([status])
+  @@index([maintenanceType])
+  @@index([scheduledDate])
+}
+
+// ============================================================================
+// USER MANAGEMENT & SECURITY
+// ============================================================================
+
+model User {
+  id                String        @id @default(cuid())
+  username          String        @unique
+  email             String?       @unique
+  password          String
+  role              String        @default("STAFF") // ADMIN, MANAGER, STAFF, VIEWER
+  
+  // Profile
+  name              String?
+  firstName         String?
+  lastName          String?
+  phone             String?
+  department        String?
+  position          String?
+  employeeId        String?       @unique
+  
+  // Status
+  isActive          Boolean       @default(true)
+  isLocked          Boolean       @default(false)
+  emailVerified     Boolean       @default(false)
+  
+  // Security
+  lastLoginAt       DateTime?
+  lastLoginIp       String?
+  passwordChangedAt DateTime?
+  failedLoginAttempts Int         @default(0)
+  lockedUntil       DateTime?
+  twoFactorEnabled  Boolean       @default(false)
+  twoFactorSecret   String?
+  
+  // Audit
+  createdAt         DateTime      @default(now())
+  updatedAt         DateTime      @updatedAt
+  createdBy         String?
+  
+  // Relations
+  sessions          UserSession[]
+  auditLogs         AuditLog[]
+  
+  @@index([username])
+  @@index([email])
+  @@index([role])
+  @@index([isActive])
+}
+
+model UserSession {
+  id            String   @id @default(cuid())
+  userId        String
+  token         String   @unique
+  ipAddress     String?
+  userAgent     String?
+  expiresAt     DateTime
+  createdAt     DateTime @default(now())
+  lastActivity  DateTime @default(now())
+  
+  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  @@index([userId])
+  @@index([token])
+  @@index([expiresAt])
+}
+
+model AuditLog {
+  id            String   @id @default(cuid())
+  userId        String?
+  username      String?
+  action        String   // CREATE, UPDATE, DELETE, LOGIN, LOGOUT, etc.
+  resource      String   // USER, ITEM, TRANSACTION, etc.
+  resourceId    String?
+  changes       String?   // JSON of before/after
+  ipAddress     String?
+  userAgent     String?
+  status        String   // SUCCESS, FAILURE
+  errorMessage  String?
+  timestamp     DateTime @default(now())
+  
+  user          User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+  
+  @@index([userId])
+  @@index([action])
+  @@index([resource])
+  @@index([timestamp])
+}
+
+// ============================================================================
+// SYSTEM CONFIGURATION
+// ============================================================================
+
+model SystemConfig {
+  id          String   @id @default(cuid())
+  key         String   @unique
+  value       String
+  type        String   @default("STRING") // STRING, NUMBER, BOOLEAN, JSON
+  description String?
+  isPublic    Boolean  @default(false)
+  updatedAt   DateTime @updatedAt
+  updatedBy   String?
+  
+  @@index([key])
+}
+
+model Category {
+  id          String   @id @default(cuid())
+  name        String   @unique
+  description String?
+  icon        String?
+  color       String?
+  isActive    Boolean  @default(true)
+  sortOrder   Int      @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  
+  @@index([name])
+  @@index([isActive])
+}
+
+model Department {
+  id          String   @id @default(cuid())
+  code        String   @unique
+  name        String
+  description String?
+  location    String?
+  managerId   String?
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  
+  @@index([code])
+  @@index([isActive])
+}
+
+model Supplier {
+  id          String   @id @default(cuid())
+  code        String   @unique
+  name        String
+  contactPerson String?
+  email       String?
+  phone       String?
+  address     String?
+  taxId       String?
+  rating      Int?     // 1-5 stars
+  notes       String?
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  
+  @@index([code])
+  @@index([name])
+  @@index([isActive])
+}
+
+model Notification {
+  id          String   @id @default(cuid())
+  userId      String
+  type        String   // INFO, WARNING, ERROR, SUCCESS
+  title       String
+  message     String
+  link        String?
+  isRead      Boolean  @default(false)
+  readAt      DateTime?
+  createdAt   DateTime @default(now())
+  
+  @@index([userId])
+  @@index([isRead])
+  @@index([createdAt])
+}
+
+// ============================================================================
+// MODEL 22 - ISSUE VOUCHER (Stock Out with Full Details)
+// ============================================================================
+
+model IssueVoucher {
+  id                String             @id @default(cuid())
+  voucherNumber     String             @unique
+  
+  // Recipient Information
+  recipientName     String
+  recipientId       String?
+  department        String?
+  requisitionNumber String?
+  
+  // Issue Details
+  issueDate         DateTime           @default(now())
+  purpose           String?
+  remarks           String?
+  
+  // Authorization
+  issuedBy          String?
+  approvedBy        String?
+  storekeeperName   String?
+  receivedBy        String?
+  
+  // Document tracking
+  pageFrom          Int?
+  pageTo            Int?
+  
+  // Status
+  status            String             @default("COMPLETED") // PENDING, APPROVED, COMPLETED, CANCELLED
+  
+  // Financial Summary
+  totalValue        Float?
+  currency          String             @default("ETB")
+  
+  // Audit fields
+  createdAt         DateTime           @default(now())
+  updatedAt         DateTime           @updatedAt
+  createdBy         String?
+  
+  // Relations
+  items             IssueVoucherItem[]
+  
+  @@index([voucherNumber])
+  @@index([issueDate])
+  @@index([department])
+  @@index([status])
+}
+
+model IssueVoucherItem {
+  id              String       @id @default(cuid())
+  voucherId       String
+  
+  // Item details
+  itemId          String?
+  itemName        String
+  description     String?
+  model           String?
+  serialNumber    String?
+  
+  // Quantity & Units
+  unit            String       @default("PCS")
+  quantity        Int
+  unitCost        Float?
+  totalCost       Float?
+  
+  // Condition
+  condition       String?      // NEW, GOOD, FAIR, DAMAGED
+  
+  // Tracking
+  pageFrom        Int?
+  pageTo          Int?
+  
+  // Audit
+  createdAt       DateTime     @default(now())
+  updatedAt       DateTime     @updatedAt
+  
+  // Relations
+  voucher         IssueVoucher @relation(fields: [voucherId], references: [id], onDelete: Cascade)
+  
+  @@index([voucherId])
+  @@index([itemId])
+}

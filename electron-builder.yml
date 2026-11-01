@@ -1,0 +1,95 @@
+appId: com.ams.asset-management
+productName: Asset Management System
+copyright: Copyright © 2026 Asset Management System
+
+directories:
+  buildResources: build
+
+# Icon for exe, installer header and window decorations
+icon: build/icon.ico
+
+files:
+  - '!**/.vscode/*'
+  - '!src/*'
+  - '!electron.vite.config.{js,ts,mjs,cjs}'
+  - '!{.eslintcache,eslint.config.mjs,.prettierignore,.prettierrc.yaml,dev-app-update.yml,CHANGELOG.md,README.md}'
+  - '!{.env,.env.*,.npmrc,pnpm-lock.yaml}'
+
+# Unpack native modules so they work outside the asar
+asarUnpack:
+  - resources/**
+  - node_modules/better-sqlite3/**
+
+# Copy icons directly to process.resourcesPath so the app can find them at runtime
+extraResources:
+  - from: build/icon.ico
+    to: icon.ico
+  - from: build/icon.png
+    to: icon.png
+
+# ── Windows ──────────────────────────────────────────────────
+win:
+  executableName: asset-management-system
+  icon: build/icon.ico
+  # Avoid winCodeSign extraction (requires symlink privilege on Windows)
+  signAndEditExecutable: false
+  target:
+    - target: nsis
+      arch:
+        - x64
+
+# ── NSIS Full Installation Wizard ────────────────────────────
+nsis:
+  oneClick: false                          # Full wizard (NOT one-click)
+  allowToChangeInstallationDirectory: true # Page: choose install folder
+  allowElevation: true
+  perMachine: false
+
+  # Icons
+  installerIcon: build/icon.ico
+  uninstallerIcon: build/icon.ico
+  installerHeaderIcon: build/icon.ico
+
+  # Shortcuts
+  createDesktopShortcut: always
+  createStartMenuShortcut: true
+  menuCategory: Asset Management System
+
+  # Run app after Finish page
+  runAfterFinish: true
+
+  # Artifact name
+  artifactName: '${productName}-${version}-Setup.${ext}'
+  shortcutName: '${productName}'
+  uninstallDisplayName: '${productName}'
+
+# ── macOS ─────────────────────────────────────────────────────
+mac:
+  entitlementsInherit: build/entitlements.mac.plist
+  extendInfo:
+    - NSCameraUsageDescription: Application requests access to the device's camera.
+    - NSMicrophoneUsageDescription: Application requests access to the device's microphone.
+    - NSDocumentsFolderUsageDescription: Application requests access to the user's Documents folder.
+    - NSDownloadsFolderUsageDescription: Application requests access to the user's Downloads folder.
+  notarize: false
+
+dmg:
+  artifactName: '${name}-${version}.${ext}'
+
+# ── Linux ─────────────────────────────────────────────────────
+linux:
+  target:
+    - AppImage
+    - snap
+    - deb
+  maintainer: electronjs.org
+  category: Utility
+
+appImage:
+  artifactName: '${name}-${version}.${ext}'
+
+npmRebuild: false
+
+publish:
+  provider: generic
+  url: https://example.com/auto-updates
