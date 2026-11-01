@@ -388,9 +388,22 @@ export const TRANSLATIONS = {
   }
 }
 
+const OLD_DEFAULT_ORG_NAME = 'የአዲስ አበባ ከተማ አስተዳደር የመንግስት ንብረት አስተዳደር ባለስልጣን'
 const DEFAULT_ORG = {
-  name: 'የአዲስ አበባ ከተማ አስተዳደር የመንግስት ንብረት አስተዳደር ባለስልጣን',
+  name: 'የንብረት አስተዳደር መቆጣጠሪያ ስርዓት',
   tagline: 'AMIS — ኃላፊነት፣ ግልፅነት እና ቁጥጥር!'
+}
+
+const getInitialOrgName = (): string => {
+  try {
+    const stored = localStorage.getItem('orgName')
+    if (!stored || stored === OLD_DEFAULT_ORG_NAME || stored.includes('የአዲስ አበባ ከተማ አስተዳደር')) {
+      return DEFAULT_ORG.name
+    }
+    return stored
+  } catch {
+    return DEFAULT_ORG.name
+  }
 }
 
 interface AppState {
@@ -511,7 +524,7 @@ export const useStore = create<AppState>((set, get) => ({
   isAuthenticated: localStorage.getItem('auth') === 'true',
   user: JSON.parse(localStorage.getItem('user') || 'null'),
 
-  orgName: localStorage.getItem('orgName') || DEFAULT_ORG.name,
+  orgName: getInitialOrgName(),
   orgTagline: localStorage.getItem('orgTagline') || DEFAULT_ORG.tagline,
   organizationMode: (localStorage.getItem('ams_org_mode') as 'single' | 'hierarchical') || 'hierarchical',
   singleOrgType: localStorage.getItem('ams_single_org_type') || 'Health Center',
@@ -584,8 +597,11 @@ export const useStore = create<AppState>((set, get) => ({
         localStorage.setItem('ams_single_org_type', settings.singleOrgType)
       }
       if (settings?.orgName) {
-        set({ orgName: settings.orgName })
-        localStorage.setItem('orgName', settings.orgName)
+        const cleanName = settings.orgName.includes('የአዲስ አበባ ከተማ አስተዳደር')
+          ? DEFAULT_ORG.name
+          : settings.orgName
+        set({ orgName: cleanName })
+        localStorage.setItem('orgName', cleanName)
       }
       if (settings?.orgTagline) {
         set({ orgTagline: settings.orgTagline })

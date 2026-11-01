@@ -83,7 +83,10 @@ export const AssetHistory = () => {
 
   // Export to CSV
   const exportToCSV = () => {
-    if (filteredHistory.length === 0) return
+    if (filteredHistory.length === 0) {
+      alert(language === 'AM' ? 'የሚወጣ ታሪክ የለም (ዝርዝሩ ባዶ ነው)!' : 'No asset history available to export!')
+      return
+    }
     const headers = ['Timestamp', 'Asset Name', 'Tag Number', 'Action Type', 'Previous Status', 'New Status', 'Performed By', 'Details']
     const rows = filteredHistory.map(h => [
       `"${h.timestamp || ''}"`,
@@ -204,9 +207,10 @@ export const AssetHistory = () => {
             <span>{language === 'AM' ? 'አድስ' : 'Refresh'}</span>
           </button>
           <button
+            type="button"
             onClick={exportToCSV}
-            disabled={filteredHistory.length === 0}
-            className="flex items-center gap-2 px-4 py-2 text-xs font-black rounded-xl bg-slate-900 text-white dark:bg-white dark:text-slate-900 hover:opacity-90 transition-all shadow-md disabled:opacity-50"
+            className="flex items-center gap-2 px-4 py-2 text-xs font-black rounded-xl bg-slate-900 text-white dark:bg-white dark:text-slate-900 hover:opacity-90 active:scale-95 transition-all shadow-md cursor-pointer"
+            title={language === 'AM' ? 'የንብረት ታሪክ ኦዲት ሪፖርት ወደ CSV አውርድ' : 'Export Audit History to CSV'}
           >
             <Download size={14} />
             <span>{language === 'AM' ? 'ወደ CSV አውርድ' : 'Export Audit CSV'}</span>

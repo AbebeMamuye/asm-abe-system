@@ -151,7 +151,7 @@ function App(): JSX.Element {
               <span className="font-black text-slate-900 dark:text-white tracking-wider">AMIS</span>
               <span className="text-slate-300 dark:text-slate-600">|</span>
               <span className="text-slate-600 dark:text-slate-300 font-medium truncate max-w-xs sm:max-w-md">
-                {orgName || 'አቃቂ ቃሊቲ ክፍለ ከተማ ዋና ስራ አስኪያጅ ጽ/ቤት'}
+                {orgName || 'የንብረት አስተዳደር መቆጣጠሪያ ስርዓት'}
               </span>
             </div>
 

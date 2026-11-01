@@ -125,10 +125,12 @@ const Login = () => {
 
             <div>
               <h1 className="text-3xl lg:text-4xl font-black leading-tight tracking-tight uppercase">
-                {orgName || (language === 'AM' ? 'የአዲስ አበባ ከተማ አስተዳደር' : 'Addis Ababa City Administration')}
+                {orgName && !orgName.includes('የአዲስ አበባ ከተማ አስተዳደር')
+                  ? orgName
+                  : (language === 'AM' ? 'የንብረት አስተዳደር መቆጣጠሪያ ስርዓት' : 'Asset Management System')}
               </h1>
               <p className="text-blue-400 font-bold text-sm mt-1 uppercase tracking-wider">
-                {orgTagline || (language === 'AM' ? 'የመንግስት ንብረት አስተዳደር ባለስልጣን' : 'Public Property Administration Authority')}
+                {orgTagline || (language === 'AM' ? 'AMIS — ኃላፊነት፣ ግልፅነት እና ቁጥጥር!' : 'Public Property Administration Authority')}
               </p>
             </div>
 
