@@ -143,7 +143,13 @@ const Sidebar = () => {
     },
     {
       id: 'vouchers-m19',
-      label: language === 'AM' ? 'የመንግስት ቫውቸሮች' : 'Gov Vouchers',
+      label: language === 'AM' ? '📥 ገቢ ቫውቸር (Model 19)' : 'Receive Voucher (M19)',
+      icon: FileText,
+      roles: ['Admin', 'Manager', 'Auditor']
+    },
+    {
+      id: 'vouchers-m22',
+      label: language === 'AM' ? '📤 ወጪ ቫውቸር (Model 22)' : 'Issue Voucher (M22)',
       icon: FileText,
       roles: ['Admin', 'Manager', 'Auditor']
     },
@@ -279,7 +285,6 @@ const Sidebar = () => {
                   const Icon = item.icon
                   const isActive =
                     activeTab === item.id ||
-                    (item.id === 'vouchers-m19' && activeTab.startsWith('vouchers')) ||
                     (item.id === 'reports' && activeTab.startsWith('reports'))
                   return (
                     <button
