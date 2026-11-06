@@ -23,9 +23,10 @@ import InventoryCount from './components/InventoryCount'
 import MyAssets from './components/MyAssets'
 import HierarchyManager from './components/HierarchyManager'
 import EmployeeClearance from './components/EmployeeClearance'
+import { VerifyDocumentModal } from './components/VerifyDocumentModal'
 import { useStore } from './store/useStore'
 import { canAccessTab, getDefaultTabForRole } from './lib/permissions'
-import { ShieldAlert, Menu, User as UserIcon, Globe, LogOut, Settings as SettingsIcon } from 'lucide-react'
+import { ShieldAlert, Menu, User as UserIcon, Globe, LogOut, Settings as SettingsIcon, ShieldCheck } from 'lucide-react'
 
 function App(): JSX.Element {
   const {
@@ -46,6 +47,7 @@ function App(): JSX.Element {
 
   const [isSidebarOpen, setIsSidebarOpen] = useState(true)
   const [isUserMenuOpen, setIsUserMenuOpen] = useState(false)
+  const [isVerifyModalOpen, setIsVerifyModalOpen] = useState(false)
 
   useEffect(() => {
     if (isAuthenticated) {
@@ -195,6 +197,16 @@ function App(): JSX.Element {
 
           {/* Right User Silhouette & Actions */}
           <div className="relative flex items-center gap-3">
+            {/* Quick Document & Seal Verification Button */}
+            <button
+              onClick={() => setIsVerifyModalOpen(true)}
+              title={language === 'AM' ? 'የማንኛውንም ቅርንጫፍ ሰነድ እና ማህተም እውነተኛነት ማረጋገጫ' : 'Verify branch seal and document authenticity'}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-blue-50 dark:bg-blue-950/40 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-800 text-xs font-black shadow-xs hover:bg-blue-100 transition-all cursor-pointer active:scale-95"
+            >
+              <ShieldCheck size={16} className="text-blue-600" />
+              <span className="hidden sm:inline">{language === 'AM' ? 'ማህተም አረጋግጥ' : 'Verify Seal'}</span>
+            </button>
+
             {/* Language Pill */}
             <div className="hidden sm:flex items-center bg-slate-100 dark:bg-slate-800 p-0.5 rounded-lg text-[11px] font-bold">
               <button
@@ -280,6 +292,12 @@ function App(): JSX.Element {
           </div>
         </main>
       </div>
+
+      {/* Official Central Document & Seal Verification Portal */}
+      <VerifyDocumentModal
+        isOpen={isVerifyModalOpen}
+        onClose={() => setIsVerifyModalOpen(false)}
+      />
     </div>
   )
 }
