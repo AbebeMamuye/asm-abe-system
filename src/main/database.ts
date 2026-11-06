@@ -365,6 +365,9 @@ export function initDatabase() {
   `)
 
   const userCols = [
+    "email TEXT DEFAULT ''",
+    "avatar TEXT DEFAULT ''",
+    "password TEXT",
     "role TEXT DEFAULT 'Guest'",
     'phone TEXT',
     'position TEXT',
@@ -385,10 +388,35 @@ export function initDatabase() {
     } catch {}
   }
 
-  // Ensure assets table has orgPath
+  // Backfill empty/null emails & avatars with safe defaults after restore
   try {
-    db.exec("ALTER TABLE assets ADD COLUMN orgPath TEXT DEFAULT '1/'")
+    db.exec(`UPDATE users SET email = name || '@ams.local' WHERE email IS NULL OR TRIM(email) = ''`)
   } catch {}
+  try {
+    db.exec(`UPDATE users SET avatar = 'https://ui-avatars.com/api/?name=' || name || '&background=0f172a&color=fff' WHERE avatar IS NULL OR TRIM(avatar) = ''`)
+  } catch {}
+
+  // Ensure assets table has all newer columns
+  const extraAssetCols = [
+    'purchaseDate TEXT',
+    'expiryDate TEXT',
+    'usefulLife INTEGER DEFAULT 5',
+    'salvageValue REAL DEFAULT 0',
+    'tagNumber TEXT',
+    'custodian TEXT',
+    'department TEXT',
+    "disposalStatus TEXT DEFAULT 'Active'",
+    'disposalMethod TEXT',
+    'disposalDate TEXT',
+    'disposalValue REAL DEFAULT 0',
+    "lifecycleStatus TEXT DEFAULT 'Registered'",
+    "orgPath TEXT DEFAULT '1/'"
+  ]
+  for (const col of extraAssetCols) {
+    try {
+      db.exec(`ALTER TABLE assets ADD COLUMN ${col}`)
+    } catch {}
+  }
 
   // Ensure pending_requests has approval and digital signature columns
   const pendingCols = [
@@ -404,12 +432,27 @@ export function initDatabase() {
   }
 
   // Ensure vouchers tables have digitalSignatureHash and verificationQrData
-  for (const tbl of ['vouchers_model19', 'vouchers_model22']) {
-    for (const c of ["orgPath TEXT DEFAULT '1/'", 'digitalSignatureHash TEXT', 'verificationQrData TEXT']) {
+  for (const tbl of ['vouchers_model19', 'vouchers_model20', 'vouchers_model22']) {
+    for (const c of [
+      "orgPath TEXT DEFAULT '1/'",
+      'digitalSignatureHash TEXT',
+      'verificationQrData TEXT',
+      'department TEXT',
+      'authorizedBy TEXT',
+      'isSealed INTEGER DEFAULT 0',
+      'sealedBy TEXT',
+      'sealedAt TEXT',
+      'sealHash TEXT'
+    ]) {
       try {
         db.exec(`ALTER TABLE ${tbl} ADD COLUMN ${c}`)
       } catch {}
     }
+  }
+
+  // Ensure departments table has all columns
+  for (const c of ['amharicName TEXT', 'type TEXT DEFAULT "Sector"', 'description TEXT', 'isActive INTEGER DEFAULT 1']) {
+    try { db.exec(`ALTER TABLE departments ADD COLUMN ${c}`) } catch {}
   }
 
   db.exec(`
