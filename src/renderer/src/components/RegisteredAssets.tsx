@@ -23,6 +23,8 @@ import AssetModal from './AssetModal'
 import AssetProfileModal from './AssetProfileModal'
 import QRCodeModal from './QRCodeModal'
 import BinCardModal from './BinCardModal'
+import { ExcelImportModal } from './ExcelImportModal'
+import { BulkQRCodeModal } from './BulkQRCodeModal'
 import ExportDropdown from './ExportDropdown'
 import jsPDF from 'jspdf'
 import autoTable from 'jspdf-autotable'
@@ -44,6 +46,8 @@ export default function RegisteredAssets() {
   const [selectedAssetForProfile, setSelectedAssetForProfile] = useState<Asset | null>(null)
   const [selectedAssetForQR, setSelectedAssetForQR] = useState<Asset | null>(null)
   const [selectedAssetForBinCard, setSelectedAssetForBinCard] = useState<Asset | null>(null)
+  const [isExcelModalOpen, setIsExcelModalOpen] = useState(false)
+  const [isBulkQRModalOpen, setIsBulkQRModalOpen] = useState(false)
 
   // Status badge config
   const getLifecycleBadge = (status?: string) => {
@@ -156,15 +160,36 @@ export default function RegisteredAssets() {
           </p>
         </div>
 
-        <div className="flex items-center gap-3">
+        <div className="flex flex-wrap items-center gap-3">
           <ExportDropdown data={exportData} filename="Registered_Assets" onExportPDF={handleExportPDF} />
+
+          <button
+            onClick={() => setIsBulkQRModalOpen(true)}
+            title={language === 'AM' ? 'የባርኮድ ስቲከሮችን በ A4 ወረቀት በጅምላ ማተሚያ' : 'Print bulk QR/barcode labels on A4 sheet'}
+            className="flex items-center gap-2 px-4 py-3 rounded-2xl bg-indigo-50 hover:bg-indigo-100 dark:bg-indigo-950/40 dark:hover:bg-indigo-900/40 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800 font-black text-sm transition-all cursor-pointer shadow-xs active:scale-95"
+          >
+            <QrCode size={17} />
+            <span>{language === 'AM' ? 'ባርኮድ በጅምላ አትም' : 'Bulk QR Labels'}</span>
+          </button>
+
+          {perms.canRegisterAsset && (
+            <button
+              onClick={() => setIsExcelModalOpen(true)}
+              title={language === 'AM' ? 'ንብረቶችን ከ Excel ፋይል በጅምላ መጫኛ' : 'Import assets from Excel/CSV spreadsheet'}
+              className="flex items-center gap-2 px-4 py-3 rounded-2xl bg-emerald-50 hover:bg-emerald-100 dark:bg-emerald-950/40 dark:hover:bg-emerald-900/40 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800 font-black text-sm transition-all cursor-pointer shadow-xs active:scale-95"
+            >
+              <FileSpreadsheet size={17} />
+              <span>{language === 'AM' ? 'በኤክሴል አስገባ' : 'Import Excel'}</span>
+            </button>
+          )}
+
           {perms.canRegisterAsset ? (
             <button
               onClick={() => {
                 setEditingAsset(null)
                 setIsAssetModalOpen(true)
               }}
-              className="flex items-center gap-2 px-5 py-3 rounded-2xl bg-blue-600 hover:bg-blue-700 text-white font-black text-sm shadow-xl shadow-blue-600/30 transition-all hover:scale-[1.02]"
+              className="flex items-center gap-2 px-5 py-3 rounded-2xl bg-blue-600 hover:bg-blue-700 text-white font-black text-sm shadow-xl shadow-blue-600/30 transition-all hover:scale-[1.02] cursor-pointer"
             >
               <Plus size={18} />
               <span>{language === 'AM' ? 'አዲስ ንብረት መዝግብ' : 'Register New Asset'}</span>
@@ -423,6 +448,22 @@ export default function RegisteredAssets() {
           onClose={() => setSelectedAssetForBinCard(null)}
         />
       )}
+
+      {/* Excel Bulk Import Modal */}
+      <ExcelImportModal
+        isOpen={isExcelModalOpen}
+        onClose={() => setIsExcelModalOpen(false)}
+        onSuccess={() => {
+          useStore.getState().fetchAssets()
+        }}
+      />
+
+      {/* Bulk QR Sticker Sheet Modal */}
+      <BulkQRCodeModal
+        isOpen={isBulkQRModalOpen}
+        onClose={() => setIsBulkQRModalOpen(false)}
+        assets={assets}
+      />
     </div>
   )
 }

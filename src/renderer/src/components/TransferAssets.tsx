@@ -12,12 +12,15 @@ import {
   AlertCircle,
   Tag,
   Eye,
-  SendHorizontal
+  SendHorizontal,
+  Printer,
+  FileText
 } from 'lucide-react'
 import { useStore, AssetTransfer, Asset, TRANSLATIONS } from '../store/useStore'
 import ExportDropdown from './ExportDropdown'
 import jsPDF from 'jspdf'
 import autoTable from 'jspdf-autotable'
+import QRCode from 'qrcode'
 import { getRolePermissions } from '../lib/permissions'
 import { toEthiopianDate, getCurrentEthiopianDate } from '../lib/ethiopianCalendar'
 
@@ -162,6 +165,178 @@ export default function TransferAssets() {
     })
 
     doc.save('Asset_Transfers_Report.pdf')
+  }
+
+  // ── Official Triplicate Model 21 Voucher PDF (ሞዴል 21 - የዕቃ ርክክብ ሰነድ) ──
+  const generateModel21PDF = async (tr: AssetTransfer) => {
+    const doc = new jsPDF()
+    const transferDate = tr.transferDate || new Date().toISOString()
+    const ecDate = toEthiopianDate(transferDate)
+    const voucherRef = tr.tagNumber ? `M21-${tr.tagNumber}` : `M21-XFER-${tr.id}`
+
+    // QR verification payload
+    const qrPayload = JSON.stringify({
+      doc: 'MODEL21',
+      voucherRef,
+      asset: tr.assetName,
+      tag: tr.tagNumber || `XFER-${tr.id}`,
+      from: tr.fromUserName,
+      to: tr.toUserName,
+      dept: tr.department || 'Central',
+      dateEC: `${ecDate} ዓ.ም`,
+      status: tr.status || 'Accepted',
+      auth: 'AMIS-ETHIOPIA-PROPERTY-ADMIN'
+    })
+
+    const qrDataUrl = await QRCode.toDataURL(qrPayload, { width: 130, margin: 1 })
+
+    const copies = [
+      {
+        badge: 'ORIGINAL — RECIPIENT COPY (1ኛ ኮፒ - ለተረካቢ ክፍል/ሰራተኛ)',
+        color: [37, 99, 235], // Blue
+        desc: 'Official handover certificate delivered to the new custodian recipient.'
+      },
+      {
+        badge: 'COPY 2 — FINANCE & AUDIT (2ኛ ኮፒ - ለፋይናንስና ሂሳብ ክፍል)',
+        color: [5, 150, 105], // Green
+        desc: 'Copy submitted to Finance for fixed asset register transfer entries.'
+      },
+      {
+        badge: 'COPY 3 — PROPERTY ARCHIVE (3ኛ ኮፒ - ለንብረት አስተዳደር መዝገብ ቤት)',
+        color: [217, 119, 6], // Amber
+        desc: 'Permanent master copy archived in Property Administration files.'
+      }
+    ]
+
+    copies.forEach((copy, index) => {
+      if (index > 0) doc.addPage()
+
+      // Header Banner
+      doc.setFillColor(30, 41, 59)
+      doc.rect(0, 0, 210, 15, 'F')
+      doc.setTextColor(255, 255, 255)
+      doc.setFontSize(8); doc.setFont('helvetica', 'bold')
+      doc.text('FEDERAL DEMOCRATIC REPUBLIC OF ETHIOPIA - PUBLIC PROPERTY ADMINISTRATION', 105, 7, { align: 'center' })
+      doc.text('የኢትዮጵያ ፌዴራላዊ ዲሞክራሲያዊ ሪፐብሊክ የመንግስት ንብረት አስተዳደር', 105, 12, { align: 'center' })
+
+      // Badge
+      doc.setFillColor(copy.color[0], copy.color[1], copy.color[2])
+      doc.rect(14, 18, 182, 8, 'F')
+      doc.setTextColor(255, 255, 255)
+      doc.setFontSize(8.5); doc.setFont('helvetica', 'bold')
+      doc.text(copy.badge, 105, 23.5, { align: 'center' })
+
+      // Document Title
+      doc.setTextColor(15, 23, 42)
+      doc.setFontSize(15); doc.setFont('helvetica', 'bold')
+      doc.text('የዕቃ ርክክብ ሰነድ (ሞዴል 21)', 105, 33, { align: 'center' })
+      doc.setFontSize(9); doc.setFont('helvetica', 'normal')
+      doc.text('INTERNAL ASSET CUSTODY HANDOVER VOUCHER — MODEL 21', 105, 38, { align: 'center' })
+
+      // Metadata Block
+      doc.setDrawColor(203, 213, 225)
+      doc.setLineWidth(0.4)
+      doc.roundedRect(14, 42, 182, 28, 3, 3)
+
+      doc.setFontSize(8.5); doc.setFont('helvetica', 'bold')
+      doc.text(`Voucher No:`, 18, 48)
+      doc.setFont('helvetica', 'normal')
+      doc.text(`${voucherRef}`, 42, 48)
+
+      doc.setFont('helvetica', 'bold')
+      doc.text(`Handover Date (EC):`, 18, 54)
+      doc.setFont('helvetica', 'normal')
+      doc.text(`${ecDate} ዓ.ም  (${new Date(transferDate).toLocaleDateString()})`, 54, 54)
+
+      doc.setFont('helvetica', 'bold')
+      doc.text(`Department / Sector:`, 18, 60)
+      doc.setFont('helvetica', 'normal')
+      doc.text(`${tr.department || 'General Administration'}`, 54, 60)
+
+      doc.setFont('helvetica', 'bold')
+      doc.text(`Status:`, 18, 66)
+      doc.setFont('helvetica', 'bold')
+      doc.setTextColor(tr.status === 'Accepted' ? 5 : 220, tr.status === 'Accepted' ? 150 : 38, tr.status === 'Accepted' ? 105 : 38)
+      doc.text(`${tr.status || 'Accepted'}`, 33, 66)
+
+      // Right Column
+      doc.setTextColor(15, 23, 42)
+      doc.setFont('helvetica', 'bold')
+      doc.text(`Handed Over By:`, 120, 48)
+      doc.setFont('helvetica', 'normal')
+      doc.text(`${tr.fromUserName}`, 152, 48)
+
+      doc.setFont('helvetica', 'bold')
+      doc.text(`Received By:`, 120, 54)
+      doc.setFont('helvetica', 'normal')
+      doc.text(`${tr.toUserName}`, 144, 54)
+
+      doc.setFont('helvetica', 'bold')
+      doc.text(`Transfer Reason:`, 120, 60)
+      doc.setFont('helvetica', 'normal')
+      doc.text(`${tr.reason || 'Official internal reassignment'}`, 150, 60, { maxWidth: 44 })
+
+      // Table of Transferred Item
+      const tableData = [
+        [
+          1,
+          tr.tagNumber || `XFER-${tr.id}`,
+          tr.assetName,
+          '1 Unit',
+          tr.fromUserName,
+          tr.toUserName,
+          tr.status || 'Accepted',
+          tr.note || 'Confirmed handover'
+        ]
+      ]
+
+      autoTable(doc, {
+        startY: 74,
+        head: [['#', 'Tag Number', 'Asset Description', 'Qty', 'Handed Over By', 'Received By', 'Status', 'Remarks']],
+        body: tableData,
+        theme: 'grid',
+        headStyles: { fillColor: [30, 41, 59], textColor: [255, 255, 255], fontStyle: 'bold', fontSize: 8 },
+        styles: { fontSize: 8, cellPadding: 4 }
+      })
+
+      // Signature & Stamp Section
+      const finalY = (doc as any).lastAutoTable.finalY + 12
+
+      doc.setDrawColor(203, 213, 225)
+      doc.line(14, finalY, 196, finalY)
+
+      doc.setFontSize(8.5); doc.setFont('helvetica', 'bold')
+      doc.setTextColor(30, 41, 59)
+      doc.text('አስረካቢ (Handed Over By):', 16, finalY + 8)
+      doc.setFont('helvetica', 'normal')
+      doc.text(`Name: ${tr.fromUserName}`, 16, finalY + 14)
+      doc.text('Signature: __________________', 16, finalY + 20)
+      doc.text(`Date: ${ecDate} ዓ.ም`, 16, finalY + 26)
+
+      doc.setFont('helvetica', 'bold')
+      doc.text('ተረካቢ (Received By):', 80, finalY + 8)
+      doc.setFont('helvetica', 'normal')
+      doc.text(`Name: ${tr.toUserName}`, 80, finalY + 14)
+      doc.text('Signature: __________________', 80, finalY + 20)
+      doc.text(`Date: ${ecDate} ዓ.ም`, 80, finalY + 26)
+
+      doc.setFont('helvetica', 'bold')
+      doc.text('ያረጋገጠው ሃላፊ (Authorized Officer):', 142, finalY + 8)
+      doc.setFont('helvetica', 'normal')
+      doc.text(`Name: Property Head`, 142, finalY + 14)
+      doc.text('Signature: __________________', 142, finalY + 20)
+      doc.text('Official Seal / ማህተም', 142, finalY + 26)
+
+      // Add QR Code at bottom left
+      doc.addImage(qrDataUrl, 'PNG', 16, finalY + 36, 26, 26)
+      doc.setFontSize(6.5); doc.setFont('helvetica', 'italic')
+      doc.setTextColor(100, 116, 139)
+      doc.text('Scan QR Code with mobile or scanner to verify authenticity and digital seal.', 46, finalY + 44)
+      doc.text(`Verification Ref: ETH-AMIS-M21-${tr.id} | Generated: ${new Date().toLocaleString()}`, 46, finalY + 49)
+      doc.text(copy.desc, 46, finalY + 54)
+    })
+
+    doc.save(`Model_21_Handover_${voucherRef}.pdf`)
   }
 
   const exportData = filteredTransfers.map((tr) => ({
@@ -351,6 +526,7 @@ export default function TransferAssets() {
                 <th className="px-6 py-4 border-2 border-slate-900 dark:border-slate-700">{language === 'AM' ? 'ምክንያት' : 'Transfer Justification'}</th>
                 <th className="px-6 py-4 border-2 border-slate-900 dark:border-slate-700">{language === 'AM' ? 'ሁኔታ' : 'Status'}</th>
                 <th className="px-6 py-4 border-2 border-slate-900 dark:border-slate-700 text-right">{language === 'AM' ? 'ቀን' : 'Date'}</th>
+                <th className="px-6 py-4 border-2 border-slate-900 dark:border-slate-700 text-center">{language === 'AM' ? 'ሰነድ (ሞዴል 21)' : 'Model 21'}</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
@@ -391,12 +567,24 @@ export default function TransferAssets() {
                   <td className="px-6 py-4 border-2 border-slate-900 dark:border-slate-700 text-right text-xs font-bold text-slate-400">
                     {tr.transferDate ? toEthiopianDate(tr.transferDate) + ' ዓ.ም' : '—'}
                   </td>
+
+                  <td className="px-6 py-4 border-2 border-slate-900 dark:border-slate-700 text-center">
+                    <button
+                      type="button"
+                      onClick={() => generateModel21PDF(tr)}
+                      title={language === 'AM' ? 'ባለ 3-ኮፒ ሞዴል 21 የዕቃ ርክክብ ሰነድ አትም' : 'Print Triplicate Model 21 Handover Voucher'}
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-indigo-50 hover:bg-indigo-100 dark:bg-indigo-950/40 dark:hover:bg-indigo-900/40 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800 text-xs font-black transition-all cursor-pointer shadow-xs active:scale-95"
+                    >
+                      <Printer size={13} />
+                      <span>{language === 'AM' ? 'ሞዴል 21' : 'Model 21'}</span>
+                    </button>
+                  </td>
                 </tr>
               ))}
 
               {filteredTransfers.length === 0 && (
                 <tr>
-                  <td colSpan={7} className="text-center py-16 text-slate-400 font-bold text-sm border-2 border-slate-900 dark:border-slate-700">
+                  <td colSpan={8} className="text-center py-16 text-slate-400 font-bold text-sm border-2 border-slate-900 dark:border-slate-700">
                     No transfer records found.
                   </td>
                 </tr>

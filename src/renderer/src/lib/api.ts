@@ -122,7 +122,18 @@ export const webAPI = {
   // ── System Settings & Feature Toggle ───────────────────────
   getSystemSettings: () => fetchAPI('/system/settings'),
   setSystemSetting: (key: string, value: string) =>
-    fetchAPI('/system/settings', { method: 'POST', body: JSON.stringify({ key, value }) })
+    fetchAPI('/system/settings', { method: 'POST', body: JSON.stringify({ key, value }) }),
+
+  // ── Bulk Assets & Database Backup / Restore / License ─────
+  importAssetsBulk: (assets: any[]) =>
+    fetchAPI('/assets/bulk', { method: 'POST', body: JSON.stringify({ assets }) }),
+  downloadBackupUrl: () => `${getBaseUrl()}/system/backup/download`,
+  getBackupsList: () => fetchAPI('/system/backups'),
+  restoreBackupBase64: (dataBase64: string) =>
+    fetchAPI('/system/restore/upload', { method: 'POST', body: JSON.stringify({ dataBase64 }) }),
+  getLicenseStatus: () => fetchAPI('/system/license'),
+  activateLicense: (key: string, clientName?: string) =>
+    fetchAPI('/system/license/activate', { method: 'POST', body: JSON.stringify({ key, clientName }) })
 };
 
 export function setupWebAPI() {

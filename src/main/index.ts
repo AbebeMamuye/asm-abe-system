@@ -208,6 +208,46 @@ app.whenReady().then(async () => {
         res.json({ success: true })
       })
 
+      // ── Bulk Assets & Clearance & Departments & System ──
+      server.post('/api/assets/bulk', (req, res) => {
+        const assets = Array.isArray(req.body) ? req.body : req.body?.assets
+        res.json(db.addAssetsBulk(assets || []))
+      })
+
+      server.get('/api/clearance', (_req, res) => res.json(db.getAllClearances()))
+      server.post('/api/clearance', (req, res) => res.json(db.createClearance(req.body)))
+      server.get('/api/clearance/employee-assets/:name', (req, res) =>
+        res.json(db.getEmployeeAssignedAssets(decodeURIComponent(req.params.name)))
+      )
+      server.get('/api/clearance/employee-consumables/:name', (req, res) =>
+        res.json(db.getEmployeeConsumables(decodeURIComponent(req.params.name)))
+      )
+      server.post('/api/clearance/return-asset', (req, res) => res.json(db.returnAssetToStore(req.body)))
+      server.post('/api/clearance/finalize', (req, res) => res.json(db.finalizeClearance(req.body)))
+
+      server.get('/api/departments', (_req, res) => res.json(db.getAllDepartments()))
+      server.post('/api/departments', (req, res) => res.json(db.createDepartment(req.body)))
+      server.put('/api/departments/:id', (req, res) => res.json(db.updateDepartment(parseInt(req.params.id), req.body)))
+      server.delete('/api/departments/:id', (req, res) => res.json(db.deleteDepartment(parseInt(req.params.id))))
+
+      server.get('/api/system/settings', (_req, res) => res.json(db.getAllSystemSettings()))
+      server.post('/api/system/settings', (req, res) => {
+        db.setSystemSetting(req.body.key, String(req.body.value ?? ''))
+        res.json({ success: true })
+      })
+      server.get('/api/system/backup/download', async (_req, res) => {
+        const b = await db.createDatabaseBackup()
+        if (b.success && b.filePath) res.download(b.filePath, b.filename)
+        else res.status(500).json({ error: b.error })
+      })
+      server.get('/api/system/backups', (_req, res) => res.json(db.listBackups()))
+      server.post('/api/system/restore/upload', (req, res) => {
+        const buf = Buffer.from(req.body.dataBase64, 'base64')
+        res.json(db.restoreDatabaseFromFile(buf))
+      })
+      server.get('/api/system/license', (_req, res) => res.json(db.getSystemLicenseStatus()))
+      server.post('/api/system/license/activate', (req, res) => res.json(db.activateSystemLicense(req.body.key, req.body.clientName)))
+
       // ── Static renderer (built React app) ──
       // In production: app.asar/out/renderer — Electron patches fs to read from asar
       const rendererPath = join(__dirname, '../renderer')

@@ -86,6 +86,13 @@ app.delete('/api/users/:id', (req, res) =>
 // ── Asset Routes ────────────────────────────────────────────
 app.get('/api/assets', (req, res) => res.json(db.getAllAssets(req.query.scope as string)))
 app.post('/api/assets', (req, res) => res.json(db.addAsset(req.body)))
+app.post('/api/assets/bulk', (req, res) => {
+  const assets = Array.isArray(req.body) ? req.body : req.body?.assets
+  if (!assets || !Array.isArray(assets)) {
+    return res.status(400).json({ error: 'Assets array required' })
+  }
+  res.json(db.addAssetsBulk(assets))
+})
 app.put('/api/assets/:id', (req, res) =>
   res.json(db.updateAsset(parseInt(req.params.id, 10), req.body))
 )
@@ -216,6 +223,50 @@ app.post('/api/system/clear-data', (req, res) => {
 })
 app.post('/api/system/reset', (_req, res) => {
   res.json(db.clearSystemData({ keepAdminOnly: true }))
+})
+
+// ── Database Backup & Restore Endpoints ─────────────────────
+app.get('/api/system/backup/download', async (_req, res) => {
+  const result = await db.createDatabaseBackup()
+  if (!result.success || !result.filePath) {
+    return res.status(500).json({ error: result.error || 'Failed to create backup' })
+  }
+  const fs = require('fs')
+  const path = require('path')
+  const absolutePath = path.resolve(result.filePath)
+  const filename = result.filename || 'asset-management-backup.db'
+  res.setHeader('Content-Type', 'application/x-sqlite3')
+  res.setHeader('Content-Disposition', `attachment; filename="${filename}"`)
+  const stream = fs.createReadStream(absolutePath)
+  stream.pipe(res)
+})
+
+app.get('/api/system/backups', (_req, res) => {
+  res.json(db.listBackups())
+})
+
+app.post('/api/system/restore/upload', (req, res) => {
+  const { dataBase64 } = req.body
+  if (!dataBase64) {
+    return res.status(400).json({ error: 'dataBase64 payload required for restore' })
+  }
+  try {
+    const buffer = Buffer.from(dataBase64, 'base64')
+    const result = db.restoreDatabaseFromFile(buffer)
+    res.json(result)
+  } catch (err: any) {
+    res.status(500).json({ error: err.message })
+  }
+})
+
+// ── Commercial License & System Activation ──────────────────
+app.get('/api/system/license', (_req, res) => {
+  res.json(db.getSystemLicenseStatus())
+})
+
+app.post('/api/system/license/activate', (req, res) => {
+  const { key, clientName } = req.body
+  res.json(db.activateSystemLicense(key, clientName))
 })
 
 // ── Static Web Frontend (Vite Build Output) ─────────────────

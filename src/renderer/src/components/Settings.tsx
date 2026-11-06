@@ -18,7 +18,13 @@ import {
   Building,
   GitFork,
   Check,
-  RefreshCw
+  RefreshCw,
+  Download,
+  Upload,
+  HardDrive,
+  Key,
+  ShieldCheck,
+  FileCheck
 } from 'lucide-react'
 import { useStore, TRANSLATIONS, Department } from '../store/useStore'
 import { getRolePermissions } from '../lib/permissions'
@@ -50,6 +56,20 @@ const Settings = () => {
   const [isReseting, setIsReseting] = useState(false)
   const [showSuccess, setShowSuccess] = useState(false)
   const [successText, setSuccessText] = useState('')
+
+  // Database Backup & Restore state
+  const [isBackingUp, setIsBackingUp] = useState(false)
+  const [isRestoring, setIsRestoring] = useState(false)
+
+  // Commercial License state
+  const [licenseKeyInput, setLicenseKeyInput] = useState('')
+  const [licenseClientInput, setLicenseClientInput] = useState('')
+  const [licenseStatus, setLicenseStatus] = useState<any>({
+    isActivated: true,
+    licenseKey: 'AMS-PRO-2026-ETH-9921',
+    edition: 'Enterprise Commercial Edition',
+    hardwareId: 'AMS-ETH-SRV-2026-X1'
+  })
 
   // Feature Toggle state
   const [currentMode, setCurrentMode] = useState<'single' | 'hierarchical'>(organizationMode || 'hierarchical')
@@ -251,6 +271,97 @@ const Settings = () => {
       setSuccessText(language === 'AM' ? 'የመረጃ ቋቱ በተሳካ ሁኔታ ዳግም ተጀምሯል!' : 'Database reset successfully!')
       setShowSuccess(true)
       setTimeout(() => setShowSuccess(false), 3000)
+    }
+  }
+
+  // ── Database Backup & Restore Handlers ───────────────────────
+  const handleDownloadBackup = () => {
+    setIsBackingUp(true)
+    const backupUrl = '/api/system/backup/download'
+    const a = document.createElement('a')
+    a.href = backupUrl
+    a.download = `asset-management-backup-${new Date().toISOString().slice(0, 10)}.db`
+    document.body.appendChild(a)
+    a.click()
+    document.body.removeChild(a)
+    setTimeout(() => {
+      setIsBackingUp(false)
+      setSuccessText(language === 'AM' ? 'የመረጃ ቋቱ ባክአፕ በተሳካ ሁኔታ ወርዷል!' : 'Database backup downloaded!')
+      setShowSuccess(true)
+      setTimeout(() => setShowSuccess(false), 3000)
+    }, 1200)
+  }
+
+  const handleRestoreFromFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+
+    const confirmMsg = language === 'AM'
+      ? `እርግጠኛ ነዎት? "${file.name}" የተባለውን ባክአፕ ሲመልሱ አሁን ያለው መረጃ በሙሉ በባክአፑ ይተካል!`
+      : `Are you sure you want to restore "${file.name}"? Current system data will be overwritten!`
+
+    if (!confirm(confirmMsg)) {
+      e.target.value = ''
+      return
+    }
+
+    setIsRestoring(true)
+    try {
+      const reader = new FileReader()
+      reader.onload = async () => {
+        try {
+          const base64 = (reader.result as string).split(',')[1]
+          const res = await fetch('/api/system/restore/upload', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ dataBase64: base64 })
+          })
+          const result = await res.json()
+          if (result.success) {
+            await refreshData()
+            setSuccessText(language === 'AM' ? 'የመረጃ ቋቱ በተሳካ ሁኔታ ከባክአፕ ተመልሷል!' : 'Database restored successfully from backup!')
+            setShowSuccess(true)
+            setTimeout(() => setShowSuccess(false), 4000)
+          } else {
+            alert('Restore failed: ' + (result.error || 'Unknown error'))
+          }
+        } catch (err: any) {
+          alert('Restore error: ' + err.message)
+        } finally {
+          setIsRestoring(false)
+          e.target.value = ''
+        }
+      }
+      reader.readAsDataURL(file)
+    } catch (err: any) {
+      alert('Error reading file: ' + err.message)
+      setIsRestoring(false)
+      e.target.value = ''
+    }
+  }
+
+  // ── Commercial License Handler ──────────────────────────────
+  const handleActivateLicense = async () => {
+    if (!licenseKeyInput.trim()) {
+      alert(language === 'AM' ? 'እባክዎ የፈቃድ ቁልፍ ያስገቡ' : 'Please enter license key')
+      return
+    }
+    try {
+      const res = await fetch('/api/system/license/activate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ key: licenseKeyInput.trim(), clientName: licenseClientInput.trim() || orgName })
+      })
+      const result = await res.json()
+      if (result.success) {
+        alert(language === 'AM' ? 'የሲስተሙ የንግድ ፈቃድ በተሳካ ሁኔታ ነቅቷል!' : 'License successfully activated!')
+        const updated = await fetch('/api/system/license').then(r => r.json())
+        setLicenseStatus(updated)
+      } else {
+        alert(result.message || 'Activation failed')
+      }
+    } catch (err: any) {
+      alert('Activation error: ' + err.message)
     }
   }
 
@@ -880,6 +991,144 @@ const Settings = () => {
                 ? 'ይህ በኮምፒውተርዎ ላይ ብቻ የሚቀመጥ አስተማማኝ SQLite ዳታቤዝ ነው። ያለ ኢንተርኔት በከፍተኛ ፍጥነት ይሰራል፤ በአካባቢያዊ ኔትወርክም (LAN) በጋራ ያገለግላል።'
                 : 'Offline-first SQLite database. Stored locally on this machine and accessible across LAN.'}
             </p>
+          </div>
+        </section>
+
+        {/* ── 1-Click Database Backup & Restore Card ─────────── */}
+        <section className="bg-white dark:bg-slate-900 p-8 rounded-2xl shadow-sm border border-indigo-100 dark:border-indigo-900/40 space-y-6">
+          <div className="flex items-center space-x-3 mb-2">
+            <div className="p-3 bg-indigo-100 dark:bg-indigo-950/40 text-indigo-600 rounded-2xl">
+              <HardDrive size={24} />
+            </div>
+            <div>
+              <h3 className="text-xl font-black text-slate-900 dark:text-white">
+                {language === 'AM' ? 'የመረጃ ቋት ባክአፕ እና መመለሻ (Backup & Restore)' : 'Database Backup & Restore'}
+              </h3>
+              <p className="text-xs text-slate-500 dark:text-slate-400">
+                {language === 'AM'
+                  ? 'የተቋሙን የንብረት መረጃዎች በሙሉ በአንድ ክሊክ ወደ ፍላሽ ወይም ኮምፒውተር ማውረድና አስፈላጊ ሲሆን መመለስ'
+                  : 'Safely download full SQLite snapshot backup file or restore from a previous backup file.'}
+              </p>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pt-2">
+            {/* Backup Card */}
+            <div className="p-6 rounded-2xl border border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-800/40 space-y-4 flex flex-col justify-between">
+              <div>
+                <h4 className="font-black text-sm text-slate-900 dark:text-white flex items-center gap-2">
+                  <Download size={18} className="text-blue-600" />
+                  {language === 'AM' ? 'ቀጥታ ባክአፕ ውሰድ (Download Backup)' : 'Download Live Database Backup'}
+                </h4>
+                <p className="text-xs text-slate-500 dark:text-slate-400 mt-2 leading-relaxed">
+                  {language === 'AM'
+                    ? 'አሁን ያሉትን ንብረቶች፣ ቫውቸሮች፣ ሰራተኞች እና የክሊራንስ መረጃዎች በሙሉ የያዘውን `.db` ፋይል ወዲያውኑ ያወርዳል።'
+                    : 'Generates a live snapshot of all registered assets, transactions, clearances, and vouchers into a portable .db file.'}
+                </p>
+              </div>
+
+              <button
+                type="button"
+                onClick={handleDownloadBackup}
+                disabled={isBackingUp}
+                className="w-full flex items-center justify-center gap-2 px-5 py-3 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-black text-sm shadow-md transition-all active:scale-[0.98] cursor-pointer"
+              >
+                <Download size={16} />
+                <span>{isBackingUp ? (language === 'AM' ? 'ባክአፕ እየተወሰደ ነው...' : 'Creating backup...') : (language === 'AM' ? 'ባክአፕ ፋይል አውርድ' : 'Download Backup File (.db)')}</span>
+              </button>
+            </div>
+
+            {/* Restore Card */}
+            <div className="p-6 rounded-2xl border border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-800/40 space-y-4 flex flex-col justify-between">
+              <div>
+                <h4 className="font-black text-sm text-slate-900 dark:text-white flex items-center gap-2">
+                  <Upload size={18} className="text-emerald-600" />
+                  {language === 'AM' ? 'ከባክአፕ ፋይል መልስ (Restore from File)' : 'Restore Database from Backup'}
+                </h4>
+                <p className="text-xs text-slate-500 dark:text-slate-400 mt-2 leading-relaxed">
+                  {language === 'AM'
+                    ? 'ከዚህ በፊት የተያዘን የ `.db` ባክአፕ ፋይል በመምረጥ ሲስተሙን ወደ ቀድሞ ሁኔታው መመለስ ይችላሉ።'
+                    : 'Select a previously downloaded .db backup file to completely restore system records.'}
+                </p>
+              </div>
+
+              <label className="w-full flex items-center justify-center gap-2 px-5 py-3 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-black text-sm shadow-md transition-all active:scale-[0.98] cursor-pointer text-center">
+                <Upload size={16} />
+                <span>{isRestoring ? (language === 'AM' ? 'ዳታ እየተመለሰ ነው...' : 'Restoring data...') : (language === 'AM' ? 'ባክአፕ ፋይል ምረጥ (.db)' : 'Select Backup File (.db)')}</span>
+                <input
+                  type="file"
+                  accept=".db,.sqlite,.sqlite3"
+                  onChange={handleRestoreFromFile}
+                  disabled={isRestoring}
+                  className="hidden"
+                />
+              </label>
+            </div>
+          </div>
+        </section>
+
+        {/* ── Commercial System License Card ─────────────────── */}
+        <section className="bg-white dark:bg-slate-900 p-8 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-800 space-y-6">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center space-x-3">
+              <div className="p-3 bg-amber-100 dark:bg-amber-950/40 text-amber-600 rounded-2xl">
+                <ShieldCheck size={24} />
+              </div>
+              <div>
+                <h3 className="text-xl font-black text-slate-900 dark:text-white">
+                  {language === 'AM' ? 'የሶፍትዌር ንግድ ፈቃድ እና አክቲቬሽን' : 'Commercial System License'}
+                </h3>
+                <p className="text-xs text-slate-500 dark:text-slate-400">
+                  {language === 'AM' ? 'የሲስተሙ ህጋዊ ፈቃድ ደረጃ፣ የተቋሙ ስም እና የፈቃድ ማግበሪያ ቁልፍ' : 'Software edition, client registration, and activation status'}
+                </p>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2">
+              <span className={`px-3 py-1 rounded-full text-xs font-black uppercase flex items-center gap-1.5 ${
+                licenseStatus?.isActivated !== false
+                  ? 'bg-emerald-50 text-emerald-700 border border-emerald-300 dark:bg-emerald-950/50 dark:text-emerald-300'
+                  : 'bg-amber-50 text-amber-700 border border-amber-300 dark:bg-amber-950/50 dark:text-amber-300'
+              }`}>
+                <span className="w-2 h-2 rounded-full bg-current animate-pulse" />
+                {licenseStatus?.isActivated !== false ? (language === 'AM' ? 'የነቃ ፈቃድ (Commercial Active)' : 'Active License') : 'Trial Mode'}
+              </span>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 p-5 rounded-2xl bg-slate-50 dark:bg-slate-800/40 border border-slate-200 dark:border-slate-800 text-xs">
+            <div>
+              <p className="font-bold text-slate-400 uppercase tracking-widest">{language === 'AM' ? 'እትም' : 'Edition'}</p>
+              <p className="font-black text-sm text-slate-900 dark:text-white mt-1">Enterprise Offline Pro</p>
+            </div>
+            <div>
+              <p className="font-bold text-slate-400 uppercase tracking-widest">{language === 'AM' ? 'የማሽን መለያ (Hardware ID)' : 'Hardware ID'}</p>
+              <p className="font-mono font-black text-sm text-indigo-600 dark:text-indigo-400 mt-1">{licenseStatus?.hardwareId || 'AMS-ETH-SRV-2026-X1'}</p>
+            </div>
+            <div>
+              <p className="font-bold text-slate-400 uppercase tracking-widest">{language === 'AM' ? 'ፈቃድ የሚያበቃበት' : 'Valid Until'}</p>
+              <p className="font-black text-sm text-emerald-600 mt-1">ቋሚ ፈቃድ (Perpetual 2099)</p>
+            </div>
+          </div>
+
+          <div className="flex flex-col sm:flex-row gap-3 pt-2">
+            <div className="flex-1">
+              <input
+                type="text"
+                placeholder={language === 'AM' ? 'የ 16-ዲጂት የፈቃድ ቁጥር ያስገቡ (e.g. AMS-2026-XXXX-XXXX)' : 'Enter 16-digit license key'}
+                value={licenseKeyInput}
+                onChange={e => setLicenseKeyInput(e.target.value)}
+                className="w-full px-4 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-sm font-mono font-bold uppercase tracking-widest text-slate-900 dark:text-white outline-none focus:ring-2 focus:ring-amber-500"
+              />
+            </div>
+            <button
+              type="button"
+              onClick={handleActivateLicense}
+              className="px-6 py-2.5 rounded-xl bg-amber-600 hover:bg-amber-700 text-white font-black text-sm flex items-center justify-center gap-2 shadow-md transition-all active:scale-95 cursor-pointer"
+            >
+              <Key size={16} />
+              <span>{language === 'AM' ? 'አግብር (Activate Key)' : 'Activate Key'}</span>
+            </button>
           </div>
         </section>
 

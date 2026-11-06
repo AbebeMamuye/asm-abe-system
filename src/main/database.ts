@@ -2465,5 +2465,159 @@ export function finalizeClearance(data: {
   }
 }
 
+// ── BULK ASSET IMPORT (ኤክሴል ጅምላ ማስገቢያ) ─────────────────────────
+
+export function addAssetsBulk(assets: Asset[]): { count: number; ids: number[]; errors: string[] } {
+  const errors: string[] = []
+  const insertedIds: number[] = []
+
+  const insertTx = db.transaction((items: Asset[]) => {
+    for (let i = 0; i < items.length; i++) {
+      try {
+        const item = items[i]
+        if (!item || !item.name) {
+          errors.push(`Row ${i + 1}: Asset name is required`)
+          continue
+        }
+        const res = addAsset(item)
+        insertedIds.push(res.id)
+      } catch (err: any) {
+        errors.push(`Row ${i + 1} (${items[i]?.name || 'Unknown'}): ${err.message}`)
+      }
+    }
+  })
+
+  insertTx(assets)
+  return { count: insertedIds.length, ids: insertedIds, errors }
+}
+
+// ── DATABASE BACKUP & RESTORE (የመረጃ ቋት ባክአፕ እና መመለሻ) ─────────
+
+export async function createDatabaseBackup(): Promise<{ success: boolean; filePath?: string; filename?: string; error?: string }> {
+  try {
+    const backupsDir = join(process.cwd(), 'data', 'backups')
+    if (!existsSync(backupsDir)) {
+      mkdirSync(backupsDir, { recursive: true })
+    }
+    const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19)
+    const filename = `asset-management-backup-${timestamp}.db`
+    const backupFilePath = join(backupsDir, filename)
+
+    // Using better-sqlite3 backup API for safe, concurrent live snapshot
+    await db.backup(backupFilePath)
+
+    return { success: true, filePath: backupFilePath, filename }
+  } catch (err: any) {
+    console.error('[AMS] Database backup error:', err)
+    return { success: false, error: err.message }
+  }
+}
+
+export function restoreDatabaseFromFile(uploadedFilePathOrBuffer: string | Buffer): { success: boolean; message?: string; error?: string } {
+  try {
+    const currentDbPath = resolveDbPath()
+    const backupsDir = join(process.cwd(), 'data', 'backups')
+    if (!existsSync(backupsDir)) mkdirSync(backupsDir, { recursive: true })
+
+    // 1. Take safety snapshot of current DB before overwriting
+    const safetySnapshotPath = join(backupsDir, `pre-restore-safety-${Date.now()}.db`)
+    try {
+      copyFileSync(currentDbPath, safetySnapshotPath)
+    } catch {}
+
+    // 2. Close active DB connection
+    try {
+      db.close()
+    } catch {}
+
+    // 3. Overwrite with new DB file
+    if (typeof uploadedFilePathOrBuffer === 'string') {
+      copyFileSync(uploadedFilePathOrBuffer, currentDbPath)
+    } else {
+      const fs = require('fs')
+      fs.writeFileSync(currentDbPath, uploadedFilePathOrBuffer)
+    }
+
+    // 4. Reopen database connection & run schema migrations
+    initDatabase()
+
+    return {
+      success: true,
+      message: 'Database successfully restored from backup! All tables re-initialized.'
+    }
+  } catch (err: any) {
+    console.error('[AMS] Database restore error:', err)
+    try { initDatabase() } catch {}
+    return { success: false, error: err.message }
+  }
+}
+
+export function listBackups(): Array<{ filename: string; sizeBytes: number; createdAt: string }> {
+  try {
+    const backupsDir = join(process.cwd(), 'data', 'backups')
+    if (!existsSync(backupsDir)) return []
+    const fs = require('fs')
+    const files = fs.readdirSync(backupsDir)
+    return files
+      .filter((f: string) => f.endsWith('.db'))
+      .map((f: string) => {
+        const stats = fs.statSync(join(backupsDir, f))
+        return {
+          filename: f,
+          sizeBytes: stats.size,
+          createdAt: stats.mtime.toISOString()
+        }
+      })
+      .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
+  } catch {
+    return []
+  }
+}
+
+// ── COMMERCIAL LICENSE & SYSTEM ACTIVATION (የሶፍትዌር ንግድ ፈቃድ) ──
+
+export function getSystemLicenseStatus(): {
+  isActivated: boolean
+  licenseKey: string
+  clientName: string
+  edition: string
+  expiresAt: string
+  hardwareId: string
+} {
+  const licenseKey = getSystemSetting('license_key', '')
+  const clientName = getSystemSetting('org_name', 'Default Enterprise')
+  const edition = getSystemSetting('license_edition', 'Enterprise Offline Pro')
+  const expiresAt = getSystemSetting('license_expires_at', '2099-12-31')
+  const hardwareId = getSystemSetting('system_hardware_id', 'AMS-ETH-SRV-2026-X1')
+
+  const isActivated = licenseKey.trim().length >= 16
+
+  return {
+    isActivated,
+    licenseKey,
+    clientName,
+    edition,
+    expiresAt,
+    hardwareId
+  }
+}
+
+export function activateSystemLicense(key: string, clientName?: string): { success: boolean; message: string } {
+  const cleanKey = (key || '').trim().toUpperCase()
+  if (cleanKey.length < 12) {
+    return { success: false, message: 'Invalid license key format. Key must be at least 12 characters.' }
+  }
+
+  setSystemSetting('license_key', cleanKey)
+  if (clientName) setSystemSetting('org_name', clientName)
+  setSystemSetting('license_activated_at', new Date().toISOString())
+
+  return {
+    success: true,
+    message: 'System commercial license successfully activated.'
+  }
+}
+
+
 
 
