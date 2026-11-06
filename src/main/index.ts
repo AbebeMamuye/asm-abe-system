@@ -100,7 +100,7 @@ app.whenReady().then(async () => {
     try {
       const server = express()
       server.use(cors())
-      server.use(express.json())
+      server.use(express.json({ limit: '50mb' }))
 
       // ── Auth & user routes ──
       server.post('/api/auth/login', (req, res) => {

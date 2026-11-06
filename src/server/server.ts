@@ -317,6 +317,12 @@ function getLocalIpAddresses(): string[] {
   return addresses
 }
 
+// ── Global JSON Error Handler (Prevents HTML 500 pages) ──────
+app.use((err: any, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
+  console.error('[AMS Error Handler]:', err)
+  res.status(err.status || 500).json({ error: err.message || 'Internal Server Error' })
+})
+
 // ── Start HTTP Server ───────────────────────────────────────
 function startServer(port: number, maxAttempts = 10) {
   const server = app.listen(port, HOST, () => {

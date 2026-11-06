@@ -11,6 +11,8 @@ services:
         value: 5002
       - key: AMS_PORT
         value: 5002
+      - key: AMS_DATA_DIR
+        value: /app/data
     disk:
       name: asm-data
       mountPath: /app/data

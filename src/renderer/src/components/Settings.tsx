@@ -316,12 +316,29 @@ const Settings = () => {
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ dataBase64: base64 })
           })
+
+          if (!res.ok) {
+            const errText = await res.text()
+            try {
+              const errJson = JSON.parse(errText)
+              alert('Restore failed: ' + (errJson.error || errText))
+            } catch {
+              alert('Restore failed: ' + errText)
+            }
+            return
+          }
+
           const result = await res.json()
           if (result.success) {
-            await refreshData()
-            setSuccessText(language === 'AM' ? 'የመረጃ ቋቱ በተሳካ ሁኔታ ከባክአፕ ተመልሷል!' : 'Database restored successfully from backup!')
+            setSuccessText(
+              language === 'AM'
+                ? 'የመረጃ ቋቱ በተሳካ ሁኔታ ከባክአፕ ተመልሷል! ሲስተሙ እንደገና በመከፈት ላይ ነው...'
+                : 'Database restored successfully from backup! Reloading system...'
+            )
             setShowSuccess(true)
-            setTimeout(() => setShowSuccess(false), 4000)
+            setTimeout(() => {
+              window.location.reload()
+            }, 1500)
           } else {
             alert('Restore failed: ' + (result.error || 'Unknown error'))
           }

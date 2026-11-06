@@ -1,6 +1,6 @@
 import Database from 'better-sqlite3'
-import { existsSync, copyFileSync, mkdirSync } from 'fs'
-import { join } from 'path'
+import { existsSync, copyFileSync, mkdirSync, writeFileSync, unlinkSync, readFileSync } from 'fs'
+import { join, dirname } from 'path'
 import { hashPassword, verifyPassword, isPasswordHashed, hashPin, verifyPin, generateDocumentSignature } from './auth'
 
 let db: Database.Database
@@ -199,7 +199,12 @@ function resolveDbPath(): string {
     return join(customDir, DB_FILENAME)
   }
 
-  // 2. Project local 'data' folder (standard for web servers & self-contained deployments)
+  // 2. Render.com persistent disk mounted at /app/data
+  if (existsSync('/app/data')) {
+    return join('/app/data', DB_FILENAME)
+  }
+
+  // 3. Project local 'data' folder (standard for web servers & self-contained deployments)
   const localDataDir = join(process.cwd(), 'data')
   const localDbPath = join(localDataDir, DB_FILENAME)
   if (existsSync(localDbPath)) {
@@ -2588,29 +2593,60 @@ export async function createDatabaseBackup(): Promise<{ success: boolean; filePa
 export function restoreDatabaseFromFile(uploadedFilePathOrBuffer: string | Buffer): { success: boolean; message?: string; error?: string } {
   try {
     const currentDbPath = resolveDbPath()
-    const backupsDir = join(process.cwd(), 'data', 'backups')
-    if (!existsSync(backupsDir)) mkdirSync(backupsDir, { recursive: true })
-
-    // 1. Take safety snapshot of current DB before overwriting
-    const safetySnapshotPath = join(backupsDir, `pre-restore-safety-${Date.now()}.db`)
-    try {
-      copyFileSync(currentDbPath, safetySnapshotPath)
-    } catch {}
-
-    // 2. Close active DB connection
-    try {
-      db.close()
-    } catch {}
-
-    // 3. Overwrite with new DB file
-    if (typeof uploadedFilePathOrBuffer === 'string') {
-      copyFileSync(uploadedFilePathOrBuffer, currentDbPath)
-    } else {
-      const fs = require('fs')
-      fs.writeFileSync(currentDbPath, uploadedFilePathOrBuffer)
+    const dbDir = dirname(currentDbPath)
+    const backupsDir = join(dbDir, 'backups')
+    if (!existsSync(backupsDir)) {
+      try { mkdirSync(backupsDir, { recursive: true }) } catch {}
     }
 
-    // 4. Reopen database connection & run schema migrations
+    // 1. Resolve and validate buffer
+    let buffer: Buffer
+    if (typeof uploadedFilePathOrBuffer === 'string') {
+      buffer = readFileSync(uploadedFilePathOrBuffer)
+    } else {
+      buffer = uploadedFilePathOrBuffer
+    }
+
+    if (!buffer || buffer.length < 100) {
+      return { success: false, error: 'Empty or invalid database backup file.' }
+    }
+
+    // Verify SQLite magic header: "SQLite format 3\0"
+    const headerStr = buffer.subarray(0, 16).toString()
+    if (!headerStr.startsWith('SQLite format 3')) {
+      return { success: false, error: 'Uploaded file is not a valid SQLite database backup.' }
+    }
+
+    // 2. Take safety snapshot of current DB before overwriting
+    const safetySnapshotPath = join(backupsDir, `pre-restore-safety-${Date.now()}.db`)
+    try {
+      if (existsSync(currentDbPath)) {
+        copyFileSync(currentDbPath, safetySnapshotPath)
+      }
+    } catch {}
+
+    // 3. Checkpoint WAL and close active DB connection cleanly
+    try {
+      if (db) {
+        try { db.pragma('wal_checkpoint(TRUNCATE)') } catch {}
+        db.close()
+      }
+    } catch {}
+
+    // 4. Delete existing WAL and SHM files so stale WAL doesn't corrupt/lock the new DB
+    try {
+      const walFile = `${currentDbPath}-wal`
+      if (existsSync(walFile)) unlinkSync(walFile)
+    } catch {}
+    try {
+      const shmFile = `${currentDbPath}-shm`
+      if (existsSync(shmFile)) unlinkSync(shmFile)
+    } catch {}
+
+    // 5. Overwrite with new DB file
+    writeFileSync(currentDbPath, buffer)
+
+    // 6. Reopen database connection & run all schema migrations
     initDatabase()
 
     return {
@@ -2620,13 +2656,14 @@ export function restoreDatabaseFromFile(uploadedFilePathOrBuffer: string | Buffe
   } catch (err: any) {
     console.error('[AMS] Database restore error:', err)
     try { initDatabase() } catch {}
-    return { success: false, error: err.message }
+    return { success: false, error: err.message || 'Error restoring database' }
   }
 }
 
 export function listBackups(): Array<{ filename: string; sizeBytes: number; createdAt: string }> {
   try {
-    const backupsDir = join(process.cwd(), 'data', 'backups')
+    const currentDbPath = resolveDbPath()
+    const backupsDir = join(dirname(currentDbPath), 'backups')
     if (!existsSync(backupsDir)) return []
     const fs = require('fs')
     const files = fs.readdirSync(backupsDir)
