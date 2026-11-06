@@ -23,6 +23,7 @@ const dbAPI = {
 
   // Vouchers — Model 20 (Requisition)
   createVoucherM20: (data: any) => ipcRenderer.invoke('db:create-voucher-m20', data),
+  sealVoucherM20: (id: number, sealedBy: string, sealHash?: string) => ipcRenderer.invoke('db:seal-voucher-m20', id, sealedBy, sealHash),
   getVouchersM20: () => ipcRenderer.invoke('db:get-vouchers-m20'),
 
   // Vouchers — Model 22 (Issuing)

@@ -22,7 +22,7 @@ interface VerificationResult {
 }
 
 export const VerifyDocumentModal: React.FC<VerifyDocumentModalProps> = ({ isOpen, onClose }) => {
-  const { vouchersM19, vouchersM22, transfers, language, orgName } = useStore()
+  const { vouchersM19, vouchersM20, vouchersM22, transfers, language, orgName } = useStore()
   const t = TRANSLATIONS[language]
 
   const [query, setQuery] = useState('')
@@ -38,7 +38,30 @@ export const VerifyDocumentModal: React.FC<VerifyDocumentModalProps> = ({ isOpen
 
     setHasSearched(true)
 
-    // 1. Check Model 19
+    // 1. Check Model 20 (Requisition with Department Circular Stamp)
+    const m20 = vouchersM20.find(v =>
+      v.voucherNumber.toUpperCase() === q ||
+      `M20-${v.voucherNumber}`.toUpperCase() === q ||
+      (v.sealHash && v.sealHash.toUpperCase() === q)
+    )
+    if (m20) {
+      const isSealed = Boolean(m20.isSealed)
+      setResult({
+        found: true,
+        voucherType: 'ሞዴል 20 — የዕቃ መጠየቂያ ሰነድ (Model 20 Store Requisition)',
+        voucherNo: m20.voucherNumber,
+        date: m20.issuedDate,
+        department: m20.department,
+        approver: m20.sealedBy || m20.authorizedBy || m20.requestedBy,
+        approverRole: isSealed ? 'የስራ ክፍል ኃላፊ (Department Head / Sealed Authority)' : 'ጠያቂ ሰራተኛ (Requester)',
+        status: isSealed ? 'VERIFIED & OFFICIALLY STAMPED (በክብ ማህተም የተረጋገጠ)' : 'PENDING OFFICIAL STAMP (ማህተም አልተደረገበትም)',
+        signatureHash: m20.sealHash || `SEAL-M20-${m20.voucherNumber}-OFFICIAL`,
+        items: (m20.items || []).map(i => ({ name: i.assetName, quantity: i.quantity, tag: i.modelSerial || i.serial }))
+      })
+      return
+    }
+
+    // 2. Check Model 19
     const m19 = vouchersM19.find(v => v.voucherNumber.toUpperCase() === q || `M19-${v.voucherNumber}`.toUpperCase() === q)
     if (m19) {
       setResult({
@@ -281,3 +304,4 @@ export const VerifyDocumentModal: React.FC<VerifyDocumentModalProps> = ({ isOpen
     </div>
   )
 }
+

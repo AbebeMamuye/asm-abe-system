@@ -105,6 +105,11 @@ app.get('/api/vouchers/m19', (_req, res) => res.json(db.getAllVouchersM19()))
 app.post('/api/vouchers/m19', (req, res) => res.json(db.createVoucherM19(req.body)))
 app.get('/api/vouchers/m20', (_req, res) => res.json(db.getAllVouchersM20()))
 app.post('/api/vouchers/m20', (req, res) => res.json(db.createVoucherM20(req.body)))
+app.post('/api/vouchers/m20/:id/seal', (req, res) => {
+  const id = Number(req.params.id)
+  const { sealedBy, sealHash } = req.body
+  res.json(db.sealVoucherM20(id, sealedBy, sealHash))
+})
 app.get('/api/vouchers/m22', (_req, res) => res.json(db.getAllVouchersM22()))
 app.post('/api/vouchers/m22', (req, res) => res.json(db.createVoucherM22(req.body)))
 app.get('/api/vouchers/nextNumber/:type', (req, res) =>

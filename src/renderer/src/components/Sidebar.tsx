@@ -31,6 +31,7 @@ const Sidebar = () => {
   const t = TRANSLATIONS[language]
   const [searchQuery, setSearchQuery] = useState('')
   const [isAssetsOpen, setIsAssetsOpen] = useState(true)
+  const [isVouchersOpen, setIsVouchersOpen] = useState(true)
 
   const userRole = user?.role || 'Guest'
   const perms = getRolePermissions(userRole)
@@ -89,6 +90,29 @@ const Sidebar = () => {
     }
   ]
 
+  // Role-appropriate Government Vouchers & Forms (የመንግስት ሰነዶችና ማህተሞች)
+  const allVoucherItems = [
+    {
+      id: 'vouchers-m20',
+      label: language === 'AM' ? '📝 የዕቃ መጠየቂያ (ሞዴል 20)' : 'Requisitions (Model 20)',
+      icon: FileText,
+      roles: ['Admin', 'Manager', 'Staff', 'Guest', 'Auditor'],
+      sealBadge: language === 'AM' ? 'ክብ ማህተም' : 'Sealed'
+    },
+    {
+      id: 'vouchers-m19',
+      label: language === 'AM' ? '📥 ገቢ ደረሰኝ (ሞዴል 19)' : 'Receive Voucher (M19)',
+      icon: FileText,
+      roles: ['Admin', 'Manager', 'Auditor']
+    },
+    {
+      id: 'vouchers-m22',
+      label: language === 'AM' ? '📤 ወጪ ደረሰኝ (ሞዴል 22)' : 'Issue Voucher (M22)',
+      icon: FileText,
+      roles: ['Admin', 'Manager', 'Auditor']
+    }
+  ]
+
   // Role-appropriate Asset Management Items
   const allAssetItems = [
     {
@@ -118,12 +142,6 @@ const Sidebar = () => {
       roles: ['Admin', 'Manager', 'Staff', 'Guest', 'Auditor']
     },
     {
-      id: 'vouchers-m20',
-      label: language === 'AM' ? 'የዕቃ መጠየቂያ (M20)' : 'Requisitions (M20)',
-      icon: FileText,
-      roles: ['Staff', 'Guest']
-    },
-    {
       id: 'maintained-assets',
       label: language === 'AM' ? 'በጥገና ላይ ያሉ' : 'Maintained Assets',
       icon: Wrench,
@@ -142,18 +160,6 @@ const Sidebar = () => {
       roles: ['Admin', 'Manager', 'Auditor', 'Viewer']
     },
     {
-      id: 'vouchers-m19',
-      label: language === 'AM' ? '📥 ገቢ ቫውቸር (Model 19)' : 'Receive Voucher (M19)',
-      icon: FileText,
-      roles: ['Admin', 'Manager', 'Auditor']
-    },
-    {
-      id: 'vouchers-m22',
-      label: language === 'AM' ? '📤 ወጪ ቫውቸር (Model 22)' : 'Issue Voucher (M22)',
-      icon: FileText,
-      roles: ['Admin', 'Manager', 'Auditor']
-    },
-    {
       id: 'reports',
       label: language === 'AM' ? 'ሪፖርቶች' : 'Reports',
       icon: BarChart,
@@ -165,6 +171,10 @@ const Sidebar = () => {
   const q = searchQuery.toLowerCase().trim()
 
   const filteredPrimary = allPrimaryItems.filter(
+    (item) => item.roles.includes(userRole) && (!q || item.label.toLowerCase().includes(q))
+  )
+
+  const filteredVouchers = allVoucherItems.filter(
     (item) => item.roles.includes(userRole) && (!q || item.label.toLowerCase().includes(q))
   )
 
@@ -267,6 +277,52 @@ const Sidebar = () => {
             </button>
           )
         })}
+
+        {/* ── Official Government Vouchers & Models (የመንግስት ሰነዶችና ማህተም) ── */}
+        {filteredVouchers.length > 0 && (
+          <div className="pt-2">
+            <button
+              onClick={() => setIsVouchersOpen(!isVouchersOpen)}
+              className="w-full flex items-center justify-between px-3 py-2 text-[11px] font-black uppercase tracking-wider text-cyan-200 bg-cyan-950/40 hover:bg-cyan-900/60 rounded-xl border border-cyan-400/20 transition-all cursor-pointer shadow-xs"
+            >
+              <div className="flex items-center gap-2 truncate">
+                <span className="w-2 h-2 rounded-full bg-cyan-400 animate-pulse shrink-0" />
+                <span className="truncate">{language === 'AM' ? 'የመንግስት ሰነዶችና ማህተም' : 'Official Forms & Seal'}</span>
+              </div>
+              {isVouchersOpen ? <ChevronDown size={14} className="shrink-0 text-cyan-300" /> : <ChevronRight size={14} className="shrink-0 text-cyan-300" />}
+            </button>
+
+            {isVouchersOpen && (
+              <div className="mt-1 space-y-0.5 pl-2 border-l-2 border-cyan-400/40 ml-2">
+                {filteredVouchers.map((item) => {
+                  const Icon = item.icon
+                  const isActive = activeTab === item.id
+                  return (
+                    <button
+                      key={item.id}
+                      onClick={() => setActiveTab(item.id)}
+                      className={`w-full flex items-center justify-between px-3 py-2 rounded-lg text-[11px] font-semibold transition-all ${
+                        isActive
+                          ? 'bg-[#186487] text-cyan-200 font-bold shadow-md shadow-black/20 translate-x-1 border border-cyan-400/30'
+                          : 'text-teal-100/85 hover:bg-[#135878]/60 hover:text-white'
+                      }`}
+                    >
+                      <div className="flex items-center space-x-2.5 truncate">
+                        <Icon size={14} className={isActive ? 'text-cyan-300' : 'text-teal-300/80'} />
+                        <span className="truncate">{item.label}</span>
+                      </div>
+                      {item.sealBadge && (
+                        <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full bg-cyan-500/20 text-cyan-300 border border-cyan-400/30 shrink-0">
+                          {item.sealBadge}
+                        </span>
+                      )}
+                    </button>
+                  )
+                })}
+              </div>
+            )}
+          </div>
+        )}
 
         {/* ── Asset Management Module Accordion (if role has asset items) ── */}
         {filteredAssets.length > 0 && (

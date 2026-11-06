@@ -205,6 +205,10 @@ export interface Voucher20 {
   issuedDate: string
   requestedBy?: string
   authorizedBy?: string
+  isSealed?: boolean | number
+  sealedBy?: string
+  sealedAt?: string
+  sealHash?: string
   items: VoucherItem[]
   createdAt?: string
 }

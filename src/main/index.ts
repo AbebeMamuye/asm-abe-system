@@ -297,6 +297,7 @@ app.whenReady().then(async () => {
   ipcMain.handle('db:create-voucher-m19', (_, data) => db.createVoucherM19(data))
   ipcMain.handle('db:get-vouchers-m19', () => db.getAllVouchersM19())
   ipcMain.handle('db:create-voucher-m20', (_, data) => db.createVoucherM20(data))
+  ipcMain.handle('db:seal-voucher-m20', (_, id, sealedBy, sealHash) => db.sealVoucherM20(id, sealedBy, sealHash))
   ipcMain.handle('db:get-vouchers-m20', () => db.getAllVouchersM20())
   ipcMain.handle('db:create-voucher-m22', (_, data) => db.createVoucherM22(data))
   ipcMain.handle('db:get-vouchers-m22', () => db.getAllVouchersM22())

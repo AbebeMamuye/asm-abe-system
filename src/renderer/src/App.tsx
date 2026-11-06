@@ -197,14 +197,14 @@ function App(): JSX.Element {
 
           {/* Right User Silhouette & Actions */}
           <div className="relative flex items-center gap-3">
-            {/* Quick Document & Seal Verification Button */}
+            {/* Central Document & Seal Verification Button (Audit scanner) */}
             <button
               onClick={() => setIsVerifyModalOpen(true)}
-              title={language === 'AM' ? 'የማንኛውንም ቅርንጫፍ ሰነድ እና ማህተም እውነተኛነት ማረጋገጫ' : 'Verify branch seal and document authenticity'}
+              title={language === 'AM' ? 'የሞዴል 20፣ 19 እና 22 ሰነዶችና ይፋዊ ማህተሞችን በQR ኮድ ወይም በቁጥር ማረጋገጫ' : 'Verify Model 20, 19, 22 seals & QR codes'}
               className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-blue-50 dark:bg-blue-950/40 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-800 text-xs font-black shadow-xs hover:bg-blue-100 transition-all cursor-pointer active:scale-95"
             >
               <ShieldCheck size={16} className="text-blue-600" />
-              <span className="hidden sm:inline">{language === 'AM' ? 'ማህተም አረጋግጥ' : 'Verify Seal'}</span>
+              <span className="hidden sm:inline">{language === 'AM' ? 'የሰነድ ማረጋገጫ (QR)' : 'Verify Document'}</span>
             </button>
 
             {/* Language Pill */}

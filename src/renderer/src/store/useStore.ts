@@ -469,6 +469,7 @@ interface AppState {
   
   createVoucherM19: (voucher: Voucher19) => Promise<void>
   createVoucherM20: (voucher: Voucher20) => Promise<void>
+  sealVoucherM20: (id: number, sealedBy: string, sealHash?: string) => Promise<void>
   createVoucherM22: (voucher: Voucher22) => Promise<void>
   
   addMaintenanceLog: (log: Partial<MaintenanceLog>) => Promise<void>
@@ -763,6 +764,12 @@ export const useStore = create<AppState>((set, get) => ({
   createVoucherM20: async (voucher) => {
     if (window.api) await window.api.createVoucherM20(voucher)
     else await callAPI('/vouchers/m20', 'POST', voucher)
+    await get().refreshData()
+  },
+
+  sealVoucherM20: async (id, sealedBy, sealHash) => {
+    if (window.api?.sealVoucherM20) await window.api.sealVoucherM20(id, sealedBy, sealHash)
+    else await callAPI(`/vouchers/m20/${id}/seal`, 'POST', { sealedBy, sealHash })
     await get().refreshData()
   },
 

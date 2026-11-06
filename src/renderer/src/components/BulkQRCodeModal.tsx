@@ -356,3 +356,4 @@ export const BulkQRCodeModal: React.FC<BulkQRCodeModalProps> = ({ isOpen, onClos
     </div>
   )
 }
+

@@ -542,6 +542,19 @@ export function initDatabase() {
     // Column might already exist
   }
 
+  try {
+    db.exec(`ALTER TABLE vouchers_model20 ADD COLUMN isSealed INTEGER DEFAULT 0`);
+  } catch (e) {}
+  try {
+    db.exec(`ALTER TABLE vouchers_model20 ADD COLUMN sealedBy TEXT`);
+  } catch (e) {}
+  try {
+    db.exec(`ALTER TABLE vouchers_model20 ADD COLUMN sealedAt TEXT`);
+  } catch (e) {}
+  try {
+    db.exec(`ALTER TABLE vouchers_model20 ADD COLUMN sealHash TEXT`);
+  } catch (e) {}
+
   db.exec(`
     CREATE TABLE IF NOT EXISTS maintenance_logs (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -1119,10 +1132,15 @@ export function createVoucherM19(voucher: any) {
 }
 
 export function createVoucherM20(voucher: any) {
+  const isSealed = voucher.isSealed ? 1 : 0
+  const sealedBy = voucher.sealedBy || (isSealed ? (voucher.authorizedBy || voucher.requestedBy) : null)
+  const sealedAt = voucher.sealedAt || (isSealed ? new Date().toISOString() : null)
+  const sealHash = voucher.sealHash || (isSealed ? `SEAL-M20-${voucher.voucherNumber}-${Date.now().toString(36).toUpperCase()}` : null)
+
   const vId = db.prepare(`
-    INSERT INTO vouchers_model20 (voucherNumber, issuedTo, department, issuedDate, requestedBy, authorizedBy)
-    VALUES (?, ?, ?, ?, ?, ?)
-  `).run(voucher.voucherNumber, voucher.issuedTo, voucher.department, voucher.issuedDate, voucher.requestedBy, voucher.authorizedBy).lastInsertRowid as number
+    INSERT INTO vouchers_model20 (voucherNumber, issuedTo, department, issuedDate, requestedBy, authorizedBy, isSealed, sealedBy, sealedAt, sealHash)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `).run(voucher.voucherNumber, voucher.issuedTo, voucher.department, voucher.issuedDate, voucher.requestedBy, voucher.authorizedBy, isSealed, sealedBy, sealedAt, sealHash).lastInsertRowid as number
 
   for (const item of voucher.items) {
     db.prepare(`
@@ -1136,7 +1154,18 @@ export function createVoucherM20(voucher: any) {
     if (item.assetId) db.prepare(`UPDATE assets SET quantity = quantity - ? WHERE id = ?`).run(item.quantity, item.assetId)
     db.prepare(`INSERT INTO transactions (assetId, assetName, type, quantity, voucherRef, note) VALUES (?, ?, 'REQUISITION', ?, ?, ?)`).run(item.assetId, item.assetName, item.quantity, voucher.voucherNumber, `Requested by ${voucher.requestedBy}`)
   }
-  return { success: true }
+  return { success: true, id: vId, isSealed, sealedBy, sealedAt, sealHash }
+}
+
+export function sealVoucherM20(voucherId: number, sealedBy: string, customHash?: string) {
+  const sealHash = customHash || `SEAL-M20-${voucherId}-${Date.now().toString(36).toUpperCase()}`
+  const sealedAt = new Date().toISOString()
+  db.prepare(`
+    UPDATE vouchers_model20
+    SET isSealed = 1, sealedBy = ?, sealedAt = ?, sealHash = ?
+    WHERE id = ?
+  `).run(sealedBy, sealedAt, sealHash, voucherId)
+  return { success: true, voucherId, isSealed: 1, sealedBy, sealedAt, sealHash }
 }
 
 export function createVoucherM22(voucher: any) {
