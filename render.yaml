@@ -2,7 +2,7 @@ services:
   - type: web
     name: asm-abe
     runtime: node
-    buildCommand: npm install && npm run web:build
+    buildCommand: npm install --include=dev && npm run web:build
     startCommand: node dist-server/server.js
     envVars:
       - key: NODE_ENV

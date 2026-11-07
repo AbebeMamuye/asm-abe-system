@@ -250,17 +250,21 @@ app.get('/api/system/backups', (_req, res) => {
   res.json(db.listBackups())
 })
 
-app.post('/api/system/restore/upload', (req, res) => {
-  const { dataBase64 } = req.body
-  if (!dataBase64) {
-    return res.status(400).json({ error: 'dataBase64 payload required for restore' })
-  }
+app.post('/api/system/restore/upload', express.raw({ type: 'application/octet-stream', limit: '100mb' }), (req, res) => {
   try {
-    const buffer = Buffer.from(dataBase64, 'base64')
+    let buffer: Buffer | null = null
+    if (Buffer.isBuffer(req.body) && req.body.length > 0) {
+      buffer = req.body
+    } else if (req.body?.dataBase64) {
+      buffer = Buffer.from(req.body.dataBase64, 'base64')
+    }
+    if (!buffer || buffer.length === 0) {
+      return res.status(400).json({ success: false, error: 'Database payload required for restore' })
+    }
     const result = db.restoreDatabaseFromFile(buffer)
     res.json(result)
   } catch (err: any) {
-    res.status(500).json({ error: err.message })
+    res.status(500).json({ success: false, error: err.message })
   }
 })
 

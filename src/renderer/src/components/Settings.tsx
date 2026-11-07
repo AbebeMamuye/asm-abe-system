@@ -307,51 +307,56 @@ const Settings = () => {
 
     setIsRestoring(true)
     try {
-      const reader = new FileReader()
-      reader.onload = async () => {
-        try {
-          const base64 = (reader.result as string).split(',')[1]
-          const res = await fetch('/api/system/restore/upload', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ dataBase64: base64 })
-          })
+      // 1. Direct stream upload as binary octet-stream (fast and zero-memory overhead)
+      let res = await fetch('/api/system/restore/upload', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/octet-stream' },
+        body: file
+      })
 
-          if (!res.ok) {
-            const errText = await res.text()
-            try {
-              const errJson = JSON.parse(errText)
-              alert('Restore failed: ' + (errJson.error || errText))
-            } catch {
-              alert('Restore failed: ' + errText)
-            }
-            return
-          }
-
-          const result = await res.json()
-          if (result.success) {
-            setSuccessText(
-              language === 'AM'
-                ? 'የመረጃ ቋቱ በተሳካ ሁኔታ ከባክአፕ ተመልሷል! ሲስተሙ እንደገና በመከፈት ላይ ነው...'
-                : 'Database restored successfully from backup! Reloading system...'
-            )
-            setShowSuccess(true)
-            setTimeout(() => {
-              window.location.reload()
-            }, 1500)
-          } else {
-            alert('Restore failed: ' + (result.error || 'Unknown error'))
-          }
-        } catch (err: any) {
-          alert('Restore error: ' + err.message)
-        } finally {
-          setIsRestoring(false)
-          e.target.value = ''
-        }
+      // Fallback to base64 JSON payload if octet-stream is rejected
+      if (!res.ok && res.status !== 500) {
+        const base64 = await new Promise<string>((resolve, reject) => {
+          const reader = new FileReader()
+          reader.onload = () => resolve((reader.result as string).split(',')[1])
+          reader.onerror = reject
+          reader.readAsDataURL(file)
+        })
+        res = await fetch('/api/system/restore/upload', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ dataBase64: base64 })
+        })
       }
-      reader.readAsDataURL(file)
+
+      if (!res.ok) {
+        const errText = await res.text()
+        try {
+          const errJson = JSON.parse(errText)
+          alert('Restore failed: ' + (errJson.error || errText))
+        } catch {
+          alert('Restore failed: ' + errText)
+        }
+        return
+      }
+
+      const result = await res.json()
+      if (result.success) {
+        setSuccessText(
+          language === 'AM'
+            ? 'የመረጃ ቋቱ በተሳካ ሁኔታ ከባክአፕ ተመልሷል! ሲስተሙ እንደገና በመከፈት ላይ ነው...'
+            : 'Database restored successfully from backup! Reloading system...'
+        )
+        setShowSuccess(true)
+        setTimeout(() => {
+          window.location.reload()
+        }, 1500)
+      } else {
+        alert('Restore failed: ' + (result.error || 'Unknown error'))
+      }
     } catch (err: any) {
-      alert('Error reading file: ' + err.message)
+      alert('Restore error: ' + err.message)
+    } finally {
       setIsRestoring(false)
       e.target.value = ''
     }

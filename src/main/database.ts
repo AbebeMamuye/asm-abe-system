@@ -372,20 +372,24 @@ export function initDatabase() {
   const userCols = [
     "email TEXT DEFAULT ''",
     "avatar TEXT DEFAULT ''",
-    "password TEXT",
+    "password TEXT DEFAULT ''",
     "role TEXT DEFAULT 'Guest'",
-    'phone TEXT',
-    'position TEXT',
-    'locationCode TEXT',
-    'departmentCode TEXT',
-    'department TEXT',
-    'supervisorId INTEGER',
-    'supervisorName TEXT',
-    'forcePasswordChange INTEGER DEFAULT 0',
-    'signingPinHash TEXT',
-    'pinFailedAttempts INTEGER DEFAULT 0',
-    'pinLockedUntil TEXT',
-    "orgPath TEXT DEFAULT '1/'"
+    "phone TEXT DEFAULT ''",
+    "position TEXT DEFAULT ''",
+    "locationCode TEXT DEFAULT ''",
+    "departmentCode TEXT DEFAULT ''",
+    "department TEXT DEFAULT ''",
+    "supervisorId INTEGER DEFAULT 0",
+    "supervisorName TEXT DEFAULT ''",
+    "forcePasswordChange INTEGER DEFAULT 0",
+    "signingPinHash TEXT DEFAULT ''",
+    "pinFailedAttempts INTEGER DEFAULT 0",
+    "pinLockedUntil TEXT DEFAULT ''",
+    "orgPath TEXT DEFAULT '1/'",
+    "createdAt TEXT DEFAULT ''",
+    "updatedAt TEXT DEFAULT ''",
+    "created_at TEXT DEFAULT ''",
+    "updated_at TEXT DEFAULT ''"
   ]
   for (const col of userCols) {
     try {
@@ -393,72 +397,185 @@ export function initDatabase() {
     } catch {}
   }
 
-  // Backfill empty/null emails & avatars with safe defaults after restore
+  // Backfill empty/null columns with safe defaults after restore
   try {
-    db.exec(`UPDATE users SET email = name || '@ams.local' WHERE email IS NULL OR TRIM(email) = ''`)
+    db.exec(`UPDATE users SET createdAt = COALESCE(created_at, datetime('now')) WHERE createdAt IS NULL OR TRIM(createdAt) = ''`)
+  } catch {}
+  try {
+    db.exec(`UPDATE users SET email = LOWER(REPLACE(name, ' ', '.')) || '@ams.local' WHERE email IS NULL OR TRIM(email) = ''`)
   } catch {}
   try {
     db.exec(`UPDATE users SET avatar = 'https://ui-avatars.com/api/?name=' || name || '&background=0f172a&color=fff' WHERE avatar IS NULL OR TRIM(avatar) = ''`)
   } catch {}
+  try {
+    db.exec(`UPDATE users SET role = 'Guest' WHERE role IS NULL OR TRIM(role) = ''`)
+  } catch {}
+  try {
+    db.exec(`UPDATE users SET phone = '09000000' || id WHERE phone IS NULL OR TRIM(phone) = ''`)
+  } catch {}
 
   // Ensure assets table has all newer columns
   const extraAssetCols = [
-    'purchaseDate TEXT',
-    'expiryDate TEXT',
-    'usefulLife INTEGER DEFAULT 5',
-    'salvageValue REAL DEFAULT 0',
-    'tagNumber TEXT',
-    'custodian TEXT',
-    'department TEXT',
+    "lastUpdated TEXT DEFAULT ''",
+    "purchaseDate TEXT DEFAULT ''",
+    "expiryDate TEXT DEFAULT ''",
+    "usefulLife INTEGER DEFAULT 5",
+    "salvageValue REAL DEFAULT 0",
+    "tagNumber TEXT DEFAULT ''",
+    "custodian TEXT DEFAULT ''",
+    "department TEXT DEFAULT ''",
     "disposalStatus TEXT DEFAULT 'Active'",
-    'disposalMethod TEXT',
-    'disposalDate TEXT',
-    'disposalValue REAL DEFAULT 0',
+    "disposalMethod TEXT DEFAULT ''",
+    "disposalDate TEXT DEFAULT ''",
+    "disposalValue REAL DEFAULT 0",
     "lifecycleStatus TEXT DEFAULT 'Registered'",
-    "orgPath TEXT DEFAULT '1/'"
+    "orgPath TEXT DEFAULT '1/'",
+    "unit TEXT DEFAULT 'Piece'",
+    "location TEXT DEFAULT ''",
+    "condition TEXT DEFAULT 'Functional'",
+    "serialNumber TEXT DEFAULT ''",
+    "supplier TEXT DEFAULT ''",
+    "fundSource TEXT DEFAULT 'Budget'",
+    "quantity INTEGER DEFAULT 0",
+    "unitCost REAL DEFAULT 0",
+    "category TEXT DEFAULT 'General'"
   ]
   for (const col of extraAssetCols) {
     try {
       db.exec(`ALTER TABLE assets ADD COLUMN ${col}`)
     } catch {}
   }
+  try {
+    db.exec(`UPDATE assets SET lastUpdated = datetime('now') WHERE lastUpdated IS NULL OR TRIM(lastUpdated) = ''`)
+  } catch {}
 
   // Ensure pending_requests has approval and digital signature columns
   const pendingCols = [
     "orgPath TEXT DEFAULT '1/'",
-    'approvedByUserId INTEGER',
-    'digitalSignatureHash TEXT',
-    'approvalTimestamp TEXT'
+    "approvedByUserId INTEGER DEFAULT 0",
+    "digitalSignatureHash TEXT DEFAULT ''",
+    "approvalTimestamp TEXT DEFAULT ''",
+    "reviewedBy TEXT DEFAULT ''",
+    "reviewNote TEXT DEFAULT ''",
+    "createdAt TEXT DEFAULT ''",
+    "reviewedAt TEXT DEFAULT ''"
   ]
   for (const col of pendingCols) {
     try {
       db.exec(`ALTER TABLE pending_requests ADD COLUMN ${col}`)
     } catch {}
   }
+  try {
+    db.exec(`UPDATE pending_requests SET createdAt = datetime('now') WHERE createdAt IS NULL OR TRIM(createdAt) = ''`)
+  } catch {}
 
   // Ensure vouchers tables have digitalSignatureHash and verificationQrData
   for (const tbl of ['vouchers_model19', 'vouchers_model20', 'vouchers_model22']) {
     for (const c of [
+      "createdAt TEXT DEFAULT ''",
       "orgPath TEXT DEFAULT '1/'",
-      'digitalSignatureHash TEXT',
-      'verificationQrData TEXT',
-      'department TEXT',
-      'authorizedBy TEXT',
-      'isSealed INTEGER DEFAULT 0',
-      'sealedBy TEXT',
-      'sealedAt TEXT',
-      'sealHash TEXT'
+      "digitalSignatureHash TEXT DEFAULT ''",
+      "verificationQrData TEXT DEFAULT ''",
+      "department TEXT DEFAULT ''",
+      "authorizedBy TEXT DEFAULT ''",
+      "requestedBy TEXT DEFAULT ''",
+      "receivedFrom TEXT DEFAULT ''",
+      "receivedDate TEXT DEFAULT ''",
+      "issuedTo TEXT DEFAULT ''",
+      "issuedDate TEXT DEFAULT ''",
+      "storeNo TEXT DEFAULT ''",
+      "shelfNo TEXT DEFAULT ''",
+      "classification TEXT DEFAULT ''",
+      "expenditureNo TEXT DEFAULT ''",
+      "incomingNo TEXT DEFAULT ''",
+      "recipientName TEXT DEFAULT ''",
+      "storekeeperName TEXT DEFAULT ''",
+      "pageFrom TEXT DEFAULT ''",
+      "pageTo TEXT DEFAULT ''",
+      "isSealed INTEGER DEFAULT 0",
+      "sealedBy TEXT DEFAULT ''",
+      "sealedAt TEXT DEFAULT ''",
+      "sealHash TEXT DEFAULT ''"
     ]) {
       try {
         db.exec(`ALTER TABLE ${tbl} ADD COLUMN ${c}`)
       } catch {}
     }
+    try {
+      db.exec(`UPDATE ${tbl} SET createdAt = datetime('now') WHERE createdAt IS NULL OR TRIM(createdAt) = ''`)
+    } catch {}
   }
 
-  // Ensure departments table has all columns
-  for (const c of ['amharicName TEXT', 'type TEXT DEFAULT "Sector"', 'description TEXT', 'isActive INTEGER DEFAULT 1']) {
+  // Ensure departments table has all columns and backfill if missing
+  for (const c of [
+    "code TEXT DEFAULT ''",
+    "name TEXT DEFAULT ''",
+    "amharicName TEXT DEFAULT ''",
+    "type TEXT DEFAULT 'Sector'",
+    "description TEXT DEFAULT ''",
+    "isActive INTEGER DEFAULT 1",
+    "createdAt TEXT DEFAULT ''"
+  ]) {
     try { db.exec(`ALTER TABLE departments ADD COLUMN ${c}`) } catch {}
   }
+  try {
+    db.exec(`UPDATE departments SET code = 'DEPT-' || id WHERE code IS NULL OR TRIM(code) = ''`)
+  } catch {}
+  try {
+    db.exec(`UPDATE departments SET amharicName = name WHERE amharicName IS NULL OR TRIM(amharicName) = ''`)
+  } catch {}
+  try {
+    db.exec(`UPDATE departments SET type = 'Sector' WHERE type IS NULL OR TRIM(type) = ''`)
+  } catch {}
+  try {
+    db.exec(`UPDATE departments SET isActive = 1 WHERE isActive IS NULL`)
+  } catch {}
+  try {
+    db.exec(`UPDATE departments SET createdAt = datetime('now') WHERE createdAt IS NULL OR TRIM(createdAt) = ''`)
+  } catch {}
+
+  // Ensure disposals, maintenance_logs, transactions have all columns
+  for (const c of [
+    "recoveredAmount REAL DEFAULT 0",
+    "quantity INTEGER DEFAULT 1",
+    "disposalMethod TEXT DEFAULT 'Disposed'",
+    "disposalDate TEXT DEFAULT ''",
+    "committeeLeader TEXT DEFAULT ''",
+    "approvedBy TEXT DEFAULT ''",
+    "reason TEXT DEFAULT ''",
+    "status TEXT DEFAULT 'Completed'",
+    "createdAt TEXT DEFAULT ''"
+  ]) {
+    try { db.exec(`ALTER TABLE disposals ADD COLUMN ${c}`) } catch {}
+  }
+  try {
+    db.exec(`UPDATE disposals SET createdAt = datetime('now') WHERE createdAt IS NULL OR TRIM(createdAt) = ''`)
+  } catch {}
+
+  for (const c of [
+    "cost REAL DEFAULT 0",
+    "issueDescription TEXT DEFAULT ''",
+    "status TEXT DEFAULT 'Reported'",
+    "reportedDate TEXT DEFAULT ''",
+    "completedDate TEXT DEFAULT ''",
+    "technicianName TEXT DEFAULT ''"
+  ]) {
+    try { db.exec(`ALTER TABLE maintenance_logs ADD COLUMN ${c}`) } catch {}
+  }
+  try {
+    db.exec(`UPDATE maintenance_logs SET reportedDate = date('now') WHERE reportedDate IS NULL OR TRIM(reportedDate) = ''`)
+  } catch {}
+
+  for (const c of [
+    "note TEXT DEFAULT ''",
+    "voucherRef TEXT DEFAULT ''",
+    "createdAt TEXT DEFAULT ''"
+  ]) {
+    try { db.exec(`ALTER TABLE transactions ADD COLUMN ${c}`) } catch {}
+  }
+  try {
+    db.exec(`UPDATE transactions SET createdAt = datetime('now') WHERE createdAt IS NULL OR TRIM(createdAt) = ''`)
+  } catch {}
 
   db.exec(`
     CREATE TABLE IF NOT EXISTS user_hierarchies (
@@ -864,7 +981,7 @@ export function registerUser(user: User & { password?: string }) {
 }
 
 export function getAllUsers() {
-  return db.prepare('SELECT id, name, email, phone, position, locationCode, departmentCode, department, supervisorId, supervisorName, role, avatar, forcePasswordChange, createdAt FROM users ORDER BY id ASC').all() as User[]
+  return db.prepare("SELECT id, name, email, phone, position, locationCode, departmentCode, department, supervisorId, supervisorName, role, avatar, forcePasswordChange, COALESCE(createdAt, created_at, datetime('now')) as createdAt FROM users ORDER BY id ASC").all() as User[]
 }
 
 /** @deprecated Use authenticateUser — never exposes password */
